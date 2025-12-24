@@ -110,28 +110,57 @@ static int block_device_read(const struct lfs_config *c,
 {
     Proc *proc = c->context;
 
-    // TODO
+    // Block offset
+    lfs_off_t abs_off = block * c->block_size + off;
+
+    // Bounds check
+    if (abs_off + size > (lfs_size_t) proc->disk_size)
+        return LFS_ERR_IO;
+
+    // Copy data from disk to buffer
+    memcpy(buffer, proc->disk_data + abs_off, size);
+    return LFS_ERR_OK;
 }
 
-static int block_device_prog(const struct lfs_config *c, lfs_block_t block, lfs_off_t off, const void *buffer, lfs_size_t size)
+static int block_device_prog(const struct lfs_config *c,
+    lfs_block_t block, lfs_off_t off, const void *buffer, lfs_size_t size)
 {
     Proc *proc = c->context;
 
-    // TODO
+    // Block ofset
+    lfs_off_t abs_off = block * c->block_size + off;
+
+    // Bounds check
+    if (abs_off + size > (lfs_size_t) proc->disk_size)
+        return LFS_ERR_IO;
+
+    // Copy data from buffer to disk
+    memcpy(proc->disk_data + abs_off, buffer, size);
+    return LFS_ERR_OK;
 }
 
-static int block_device_erase(const struct lfs_config *c, lfs_block_t block)
+static int block_device_erase(const struct lfs_config *c,
+    lfs_block_t block)
 {
     Proc *proc = c->context;
 
-    // TODO
+    // Block offset
+    lfs_off_t abs_off = block * c->block_size;
+
+    // Bounds check
+    if (abs_off + c->block_size > (lfs_size_t) proc->disk_size)
+        return LFS_ERR_IO;
+
+    // Erase the block by setting all bytes to 0xFF (typical erased flash state)
+    memset(proc->disk_data + abs_off, 0xFF, c->block_size);
+    return LFS_ERR_OK;
 }
 
 static int block_device_sync(const struct lfs_config *c)
 {
-    Proc *proc = c->context;
-
-    // TODO
+    // No-op for in-memory storage - nothing to flush
+    (void) c;
+    return LFS_ERR_OK;
 }
 
 static bool is_desc_idx_valid(Proc *proc, int desc_idx);
