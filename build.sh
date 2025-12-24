@@ -1,0 +1,1 @@
+gcc main.c src/socket_queue.c src/syscalls.c src/proc.c src/sim.c -o main -Wall -Wextra -Iinclude
