@@ -70,12 +70,12 @@ int mock_linux_socket(int domain, int type, int protocol)
     if (ret < 0) {
         switch (ret) {
         case PROC_ERROR_FULL:
-            errno = xxx;
+            errno = EMFILE;
             return -1;
         default:
             break;
         }
-        errno = xxx;
+        errno = EIO;
         return -1;
     }
     int desc_idx = ret;
@@ -101,7 +101,7 @@ int mock_linux_close(int fd)
         default:
             break;
         }
-        errno = xxx;
+        errno = EIO;
         return -1;
     }
 
@@ -182,7 +182,7 @@ int mock_linux_bind(int fd, void *addr, size_t addr_len)
         default:
             break;
         }
-        errno = xxx;
+        errno = EIO;
         return -1;
     }
 
@@ -214,7 +214,7 @@ int mock_linux_listen(int fd, int backlog)
             errno = EADDRINUSE;
             return -1;
         }
-        errno = xxx;
+        errno = EIO;
         return -1;
     }
 
@@ -241,11 +241,28 @@ int mock_linux_connect(int fd, void *addr, size_t addr_len)
     int desc_idx = fd;
     ret = proc_connect(proc, desc_idx, converted_addr, converted_port);
     if (ret < 0) {
-        errno = xxx;
+        switch (ret) {
+        case PROC_ERROR_BADIDX:
+            errno = EBADF;
+            return -1;
+        case PROC_ERROR_NOTSOCK:
+            errno = ENOTSOCK;
+            return -1;
+        case PROC_ERROR_BADARG:
+            errno = EISCONN;
+            return -1;
+        case PROC_ERROR_ADDRUSED:
+            errno = EADDRINUSE;
+            return -1;
+        default:
+            break;
+        }
+        errno = EINPROGRESS;
         return -1;
     }
 
-    return 0;
+    errno = EINPROGRESS;
+    return -1;
 }
 
 int mock_linux_open(char *path, int flags, int mode)
@@ -260,7 +277,17 @@ int mock_linux_open(char *path, int flags, int mode)
 
     int ret = proc_open_file(proc, path, converted_flags);
     if (ret < 0) {
-        errno = xxx;
+        switch (ret) {
+        case PROC_ERROR_FULL:
+            errno = EMFILE;
+            return -1;
+        case PROC_ERROR_IO:
+            errno = EIO;
+            return -1;
+        default:
+            break;
+        }
+        errno = ENOENT;
         return -1;
     }
     int desc_idx = ret;
@@ -292,7 +319,7 @@ int mock_linux_read(int fd, char *dst, int len)
             errno = EIO;
             return -1;
         }
-        errno = xxx;
+        errno = EIO;
         return -1;
     }
 
@@ -319,7 +346,7 @@ int mock_linux_write(int fd, char *src, int len)
         default:
             break;
         }
-        errno = xxx;
+        errno = EIO;
         return -1;
     }
 
@@ -355,10 +382,13 @@ int mock_linux_recv(int fd, char *dst, int len, int flags)
         case PROC_ERROR_HANGUP:
             errno = 0;
             return 0;
+        case PROC_ERROR_WOULDBLOCK:
+            errno = EAGAIN;
+            return -1;
         default:
             break;
         }
-        errno = xxx;
+        errno = EIO;
         return -1;
     }
 
@@ -389,10 +419,13 @@ int mock_linux_send(int fd, char *src, int len, int flags)
         case PROC_ERROR_HANGUP:
             errno = EPIPE;
             return -1;
+        case PROC_ERROR_WOULDBLOCK:
+            errno = EAGAIN;
+            return -1;
         default:
             break;
         }
-        errno = xxx;
+        errno = EIO;
         return -1;
     }
 
@@ -401,7 +434,62 @@ int mock_linux_send(int fd, char *src, int len, int flags)
 
 int mock_linux_accept(int fd, void *addr, socklen_t *addr_len)
 {
-    abortf("mock %s() not implemented yet\n", __func__); // TODO
+    Proc *proc = proc_current();
+    if (proc == NULL)
+        abortf("Call to %s() with no node scheduled\n", __func__);
+
+    ensure_os(proc, OS_LINUX, __func__);
+
+    Addr     peer_addr;
+    uint16_t peer_port;
+    int ret = proc_accept(proc, fd, &peer_addr, &peer_port);
+    if (ret < 0) {
+        switch (ret) {
+        case PROC_ERROR_BADIDX:
+            errno = EBADF;
+            return -1;
+        case PROC_ERROR_NOTSOCK:
+            errno = ENOTSOCK;
+            return -1;
+        case PROC_ERROR_BADARG:
+            errno = EINVAL;
+            return -1;
+        case PROC_ERROR_FULL:
+            errno = EMFILE;
+            return -1;
+        case PROC_ERROR_WOULDBLOCK:
+            errno = EAGAIN;
+            return -1;
+        default:
+            break;
+        }
+        errno = EIO;
+        return -1;
+    }
+    int new_fd = ret;
+
+    // Fill in the address if provided
+    if (addr != NULL && addr_len != NULL) {
+        if (peer_addr.family == ADDR_FAMILY_IPV4) {
+            struct sockaddr_in *sin = addr;
+            if (*addr_len >= sizeof(struct sockaddr_in)) {
+                sin->sin_family = AF_INET;
+                sin->sin_port = peer_port;
+                memcpy(&sin->sin_addr, &peer_addr.ipv4, sizeof(peer_addr.ipv4));
+                *addr_len = sizeof(struct sockaddr_in);
+            }
+        } else {
+            struct sockaddr_in6 *sin6 = addr;
+            if (*addr_len >= sizeof(struct sockaddr_in6)) {
+                sin6->sin6_family = AF_INET6;
+                sin6->sin6_port = peer_port;
+                memcpy(&sin6->sin6_addr, &peer_addr.ipv6, sizeof(peer_addr.ipv6));
+                *addr_len = sizeof(struct sockaddr_in6);
+            }
+        }
+    }
+
+    return new_fd;
 }
 
 int mock_linux_getsockopt(int fd, int level, int optname, void *optval, socklen_t *optlen)

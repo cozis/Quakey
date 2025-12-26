@@ -64,7 +64,7 @@ static char *socket_queue_write_buf(SocketQueue *queue, int *cap)
         *cap = queue->size - queue->used;
 
     int last = queue->head + queue->used;
-    if (queue->size - last < len) {
+    if (queue->size - last < *cap) {
         memmove(queue->data, queue->data + queue->head, queue->used);
         queue->head = 0;
     }
@@ -74,7 +74,7 @@ static char *socket_queue_write_buf(SocketQueue *queue, int *cap)
 
 static void socket_queue_write_ack(SocketQueue *queue, int num)
 {
-    queue->used += len;
+    queue->used += num;
 }
 
 static int socket_queue_write(SocketQueue *queue, char *src, int len)
@@ -87,12 +87,15 @@ static int socket_queue_write(SocketQueue *queue, char *src, int len)
 
 static int socket_queue_move(SocketQueue *dst_queue, SocketQueue *src_queue, int max)
 {
-    char *src = socket_queue_read_buf(src_queue, xxx);
-    char *dst = socket_queue_write_buf(dst_queue, &len);
-    memcpy(dst, src, len);
-    socket_queue_write_ack(dst_queue, len);
-    socket_queue_read_ack(src_queue, len);
-    return len;
+    int avail;
+    char *src = socket_queue_read_buf(src_queue, &avail);
+    if (avail > max)
+        avail = max;
+    char *dst = socket_queue_write_buf(dst_queue, &avail);
+    memcpy(dst, src, avail);
+    socket_queue_write_ack(dst_queue, avail);
+    socket_queue_read_ack(src_queue, avail);
+    return avail;
 }
 
 static bool socket_queue_full(SocketQueue *queue)
@@ -339,9 +342,56 @@ void proc_free(Proc *proc)
             desc_free(&proc->desc[i], &proc->lfs, true);
 }
 
-int proc_restart(Proc *proc, bool whipe_disk)
+int proc_restart(Proc *proc, bool wipe_disk)
 {
-    // TODO
+    // Free the current state
+    current_proc___ = proc;
+    proc->free_func(proc->state);
+    current_proc___ = NULL;
+    free(proc->state);
+
+    // Close all descriptors
+    for (int i = 0; i < PROC_DESC_LIMIT; i++) {
+        if (proc->desc[i].type != DESC_EMPTY) {
+            desc_free(&proc->desc[i], &proc->lfs, true);
+            proc->desc[i].type = DESC_EMPTY;
+        }
+    }
+    proc->num_desc = 0;
+
+    // Unmount filesystem
+    lfs_unmount(&proc->lfs);
+
+    // Optionally wipe the disk
+    if (wipe_disk) {
+        memset(proc->disk_data, 0, proc->disk_size);
+    }
+
+    // Remount filesystem
+    int ret = lfs_mount(&proc->lfs, &proc->lfs_cfg);
+    if (ret) {
+        lfs_format(&proc->lfs, &proc->lfs_cfg);
+        ret = lfs_mount(&proc->lfs, &proc->lfs_cfg);
+        if (ret)
+            return -1;
+    }
+
+    // Reset other state
+    proc->os = OS_UNSPECIFIED;
+    proc->next_ephimeral_port = FIRST_EPHIMERAL_PORT;
+    proc->current_time = 0;
+    proc->poll_count = 0;
+    proc->poll_timeout = -1;
+
+    // TODO: Allocate and initialize new state
+    //
+    // Note: We don't have access to state_size, argc, argv here
+    // This function assumes proc_init was already called with valid values
+    // and we need to re-run init_func with stored argc/argv
+    // For now, we assume state can be re-allocated with the same size
+    assert(0);
+
+    return 0;
 }
 
 void proc_advance_network(Proc *proc)
@@ -396,7 +446,50 @@ int proc_tick(Proc *proc)
 
 bool proc_ready(Proc *proc)
 {
-    assert(0); // TODO
+    // If poll timeout is 0, always ready
+    if (proc->poll_timeout == 0)
+        return true;
+
+    // Check if any polled descriptors have pending events
+    for (int i = 0; i < proc->poll_count; i++) {
+
+        int fd = proc->poll_array[i].fd;
+        int events = proc->poll_array[i].events;
+
+        if (!is_desc_idx_valid(proc, fd))
+            continue;
+
+        Desc *desc = &proc->desc[fd];
+
+        switch (desc->type) {
+        case DESC_SOCKET_L:
+            if (events & POLLIN) {
+                if (!accept_queue_empty(&desc->accept_queue))
+                    return true;
+            }
+            break;
+        case DESC_SOCKET_C:
+            if (events & POLLIN) {
+                if (!socket_queue_empty(&desc->input) || desc->rst || desc->hup)
+                    return true;
+            }
+            if (events & POLLOUT) {
+                if (!socket_queue_full(&desc->output) && is_connected_and_accepted(desc))
+                return true;
+            }
+            break;
+        case DESC_FILE:
+        case DESC_DIRECTORY:
+            // Files and directories are always ready
+            if (events & (POLLIN | POLLOUT))
+                return true;
+            break;
+        default:
+            break;
+        }
+    }
+
+    return false;
 }
 
 static bool addr_eql(Addr a1, Addr a2)

@@ -347,6 +347,15 @@ int proc_bind(Proc *proc, int desc_idx,
 int proc_listen(Proc *proc, int desc_idx,
     int backlog);
 
+// Returns a new descriptor index on success, or a negative error code:
+//   - PROC_ERROR_BADIDX index does not refer to a valid descriptor
+//   - PROC_ERROR_NOTSOCK descriptor is not a socket
+//   - PROC_ERROR_BADARG descriptor is a socket but not a listening socket
+//   - PROC_ERROR_FULL descriptor limit reached
+//   - PROC_ERROR_WOULDBLOCK no pending connections
+int proc_accept(Proc *proc, int desc_idx,
+    Addr *addr, uint16_t *port);
+
 // TODO: comment
 int proc_connect(Proc *proc, int desc_idx,
     Addr addr, uint16_t port);
