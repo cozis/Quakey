@@ -236,6 +236,33 @@ set_revents_in_poll_array(Proc *proc)
     }
 }
 
+static int split_args(char *arg, char **argv, int max_argc)
+{
+    int argc = 0;
+    for (int cur = 0, len = strlen(arg);; ) {
+
+        while (cur < len && (arg[cur] == ' ' || arg[cur] == '\t'))
+            cur++;
+
+        if (cur == len)
+            break;
+
+        int off = cur;
+
+        while (cur < len && arg[cur] != ' ' && arg[cur] != '\t')
+            cur++;
+
+        arg[cur] = '\0';
+        cur++;
+
+        if (argc == max_argc)
+            return -1;
+        argv[argc++] = arg + off;
+    }
+
+    return argc;
+}
+
 int proc_init(Proc *proc,
     QuakeySim *sim,
     int state_size,
@@ -245,10 +272,14 @@ int proc_init(Proc *proc,
     Addr *addrs,
     int   num_addrs,
     int   disk_size,
-    int    argc,
-    char **argv)
+    char *arg)
 {
     proc->sim = sim;
+
+    proc->arg = strdup(arg);
+    if (proc->arg == NULL)
+        return -1;
+
     proc->init_func = init_func;
     proc->tick_func = tick_func;
     proc->free_func = free_func;
@@ -312,6 +343,9 @@ int proc_init(Proc *proc,
         return -1;
     }
 
+    char *argv[PROC_ARGC_LIMIT];
+    int argc = split_args(proc->arg, argv, PROC_ARGC_LIMIT);
+
     current_proc___ = proc;
     ret = init_func(state, argc, argv, proc->poll_array, PROC_DESC_LIMIT, &proc->poll_count, &proc->poll_timeout);
     current_proc___ = NULL;
@@ -323,6 +357,7 @@ int proc_init(Proc *proc,
     }
 
     proc->state = state;
+    proc->state_size = state_size;
     return 0;
 }
 
@@ -331,6 +366,8 @@ void proc_free(Proc *proc)
     current_proc___ = proc;
     proc->free_func(proc->state);
     current_proc___ = NULL;
+
+    free(proc->arg);
 
     free(proc->state);
 
@@ -383,14 +420,29 @@ int proc_restart(Proc *proc, bool wipe_disk)
     proc->poll_count = 0;
     proc->poll_timeout = -1;
 
-    // TODO: Allocate and initialize new state
-    //
-    // Note: We don't have access to state_size, argc, argv here
-    // This function assumes proc_init was already called with valid values
-    // and we need to re-run init_func with stored argc/argv
-    // For now, we assume state can be re-allocated with the same size
-    assert(0);
+    // Allocate and initialize new state
 
+    void *state = malloc(proc->state_size);
+    if (state == NULL) {
+        lfs_unmount(&proc->lfs);
+        free(proc->disk_data);
+        return -1;
+    }
+
+    char *argv[PROC_ARGC_LIMIT];
+    int argc = split_args(proc->arg, argv, PROC_ARGC_LIMIT);
+
+    current_proc___ = proc;
+    ret = init_func(state, argc, argv, proc->poll_array, PROC_DESC_LIMIT, &proc->poll_count, &proc->poll_timeout);
+    current_proc___ = NULL;
+    if (ret < 0) {
+        free(state);
+        lfs_unmount(&proc->lfs);
+        free(proc->disk_data);
+        return -1;
+    }
+
+    proc->state = state;
     return 0;
 }
 
@@ -513,7 +565,7 @@ bool proc_has_addr(Proc *proc, Addr addr)
 
 static int accept_queue_init(AcceptQueue *queue, int capacity)
 {
-    Desc **entries = malloc(sizeof(Desc*));
+    Desc **entries = malloc(capacity * sizeof(Desc*));
     if (entries == NULL)
         return -1;
     queue->head = 0;
@@ -684,6 +736,7 @@ int proc_create_socket(Proc *proc, AddrFamily family)
     desc->is_explicitly_bound = false;
     desc->bound_addr = (Addr) { .family=family };
     desc->bound_port = 0;
+    proc->num_desc++;
 
     proc->current_time += pick_create_socket_duration(proc);
     return desc_idx;
@@ -726,6 +779,7 @@ int proc_close(Proc *proc, int desc_idx, bool expect_socket)
     }
 
     desc_free(&proc->desc[desc_idx], &proc->lfs, false);
+    proc->num_desc--;
 
     proc->current_time += pick_close_duration(proc);
     return 0;
@@ -950,10 +1004,16 @@ int proc_accept(Proc *proc, int desc_idx, Addr *addr, uint16_t *port)
     *addr = peer->bound_addr;
     *port = peer->bound_port;
 
+    Addr local_addr = desc->bound_addr;
+    if (is_zero_addr(local_addr)) {
+        assert(proc->num_addrs > 0);
+        local_addr = proc->addrs[0];
+    }
+
     new_desc->type = DESC_SOCKET_C;
     new_desc->non_blocking = false;
-    new_desc->bound_addr = xxx;
-    new_desc->bound_port = xxx;
+    new_desc->bound_addr = local_addr;
+    new_desc->bound_port = desc->bound_port;
     new_desc->connect_addr = peer->bound_addr;
     new_desc->connect_port = peer->bound_port;
     new_desc->connect_time = proc->current_time;
@@ -965,6 +1025,7 @@ int proc_accept(Proc *proc, int desc_idx, Addr *addr, uint16_t *port)
     new_desc->hup  = false;
     socket_queue_init(&new_desc->input, 1<<12);
     socket_queue_init(&new_desc->output, 1<<12);
+    proc->num_desc++;
 
     proc->current_time += pick_accept_duration(proc);
     return new_desc_idx;
@@ -1048,6 +1109,7 @@ int proc_open_file(Proc *proc, char *path, int flags)
 
     desc->type = DESC_FILE;
     desc->non_blocking = false;
+    proc->num_desc++;
 
     proc->current_time += pick_open_file_duration(proc);
     return desc_idx;
@@ -1073,6 +1135,7 @@ int proc_open_dir(Proc *proc, char *path)
 
     desc->type = DESC_DIRECTORY;
     desc->non_blocking = false;
+    proc->num_desc++;
 
     proc->current_time += pick_open_dir_duration(proc);
     return desc_idx;

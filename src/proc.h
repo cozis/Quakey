@@ -13,6 +13,8 @@
 // On Linux the descriptor limit is usually 1K
 #define PROC_DESC_LIMIT 1024
 
+#define PROC_ARGC_LIMIT 32
+
 // Backlog size used by listen() when the provided
 // backlog argument is non-positive
 #define DEFAULT_BACKLOG 128
@@ -226,6 +228,9 @@ struct Proc {
     // Parent simulation
     QuakeySim *sim;
 
+    // Command-line arguments as a single dynamic string
+    char *arg;
+
     // Pointers to program code
     QuakeyInitFunc init_func;
     QuakeyTickFunc tick_func;
@@ -233,6 +238,7 @@ struct Proc {
 
     // Program-specific state
     void *state;
+    int   state_size;
 
     // Operating system used by the process.
     // It starts as UNSPECIFIED and is set to
@@ -288,8 +294,7 @@ int proc_init(Proc *proc,
     Addr *addrs,
     int   num_addrs,
     int   disk_size,
-    int    argc,
-    char **argv);
+    char *arg);
 
 // Frees all resources associated with a process, including its state,
 // open descriptors, and filesystem. Calls the process's free_func callback.

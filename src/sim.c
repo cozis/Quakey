@@ -25,9 +25,9 @@ void quakey_sim_free(QuakeySim *sim)
 {
     for (int i = 0; i < sim->num_procs; i++)
         proc_free(sim->procs[i]);
-}
 
-#define SPAWN_ARG_LIMIT 128
+    free(sim->procs);
+}
 
 int quakey_sim_spawn(QuakeySim *sim, QuakeySpawnConfig config, char *arg)
 {
@@ -47,33 +47,6 @@ int quakey_sim_spawn(QuakeySim *sim, QuakeySpawnConfig config, char *arg)
         }
     }
 
-    arg = strdup(arg);
-    int argc = 0;
-    char *argv[SPAWN_ARG_LIMIT];
-    for (int cur = 0, len = strlen(arg);; ) {
-
-        while (cur < len && (arg[cur] == ' ' || arg[cur] == '\t'))
-            cur++;
-
-        if (cur == len)
-            break;
-
-        int off = cur;
-
-        while (cur < len && arg[cur] != ' ' && arg[cur] != '\t')
-            cur++;
-
-        arg[cur] = '\0';
-        cur++;
-
-        if (argc == SPAWN_ARG_LIMIT) {
-            free(arg);
-            free(proc);
-            return -1;
-        }
-        argv[argc++] = arg + off;
-    }
-
     int ret = proc_init(
         proc, sim,
         config.state_size,
@@ -83,8 +56,7 @@ int quakey_sim_spawn(QuakeySim *sim, QuakeySpawnConfig config, char *arg)
         parsed_addrs,
         config.num_addrs,
         config.disk_size,
-        argc,
-        argv
+        arg
     );
     if (ret < 0) {
         free(arg);

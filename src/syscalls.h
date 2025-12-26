@@ -5,6 +5,8 @@
 
 #include "proc.h"
 
+#define MAX_PATH 1024
+
 enum {
     AF_INET,
     AF_INET6,
@@ -33,6 +35,7 @@ typedef unsigned short WORD;
 typedef float          FLOAT;
 typedef unsigned long  DWORD;
 typedef int64_t        LONGLONG;
+typedef void *         PVOID;
 typedef LONG *         PLONG;
 typedef unsigned long  ULONG_PTR;
 typedef void *LPVOID;

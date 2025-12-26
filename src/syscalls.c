@@ -134,7 +134,7 @@ static int convert_addr(void *addr, size_t addr_len,
             struct sockaddr_in6 *p = addr;
             converted_addr->family = ADDR_FAMILY_IPV6;
             converted_addr->ipv6   = *(AddrIPv6*) &p->sin6_addr;
-            *converted_port        = p->sin_port;
+            *converted_port        = p->sin6_port;
         }
         break;
     default:
