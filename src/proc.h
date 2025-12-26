@@ -271,10 +271,14 @@ struct Proc {
     int           poll_timeout;
 };
 
-// TODO: comment
+// Returns a pointer to the currently scheduled process, or NULL
+// if no process is currently being executed.
 Proc *proc_current(void);
 
-// TODO: comment
+// Initializes a process with the given simulation context, callbacks,
+// network addresses, and disk configuration. The init_func is called
+// immediately to set up the initial process state.
+// Returns 0 on success, -1 on failure (memory allocation or init failed).
 int proc_init(Proc *proc,
     QuakeySim *sim,
     int state_size,
@@ -287,25 +291,33 @@ int proc_init(Proc *proc,
     int    argc,
     char **argv);
 
-// TODO: comment
+// Frees all resources associated with a process, including its state,
+// open descriptors, and filesystem. Calls the process's free_func callback.
 void proc_free(Proc *proc);
 
-// TODO: comment
-int proc_restart(Proc *proc, bool whipe_disk);
+// Restarts a process by freeing its current state, closing all descriptors,
+// and reinitializing the filesystem. If wipe_disk is true, the disk contents
+// are zeroed before remounting. Returns 0 on success, -1 on failure.
+int proc_restart(Proc *proc, bool wipe_disk);
 
-// TODO: comment
+// Advances the network simulation for the process. Transfers data between
+// connected sockets based on elapsed time and transfer rates.
 void proc_advance_network(Proc *proc);
 
-// TODO: comment
+// Executes one tick of the process by calling its tick_func callback.
+// Updates poll revents before calling. Returns 0 on success, -1 on failure.
 int proc_tick(Proc *proc);
 
-// TODO: comment
+// Returns true if the process has pending events to handle, i.e., if any
+// polled descriptors have ready events or if the poll timeout is zero.
 bool proc_ready(Proc *proc);
 
-// TODO: comment
+// Returns true if the given address is one of the addresses assigned
+// to this process.
 bool proc_has_addr(Proc *proc, Addr addr);
 
-// TODO: comment
+// Returns the current simulated time in nanoseconds and advances it
+// by a small duration.
 Nanos proc_time(Proc *proc);
 
 // Returns the descriptor index on success,
@@ -356,26 +368,68 @@ int proc_listen(Proc *proc, int desc_idx,
 int proc_accept(Proc *proc, int desc_idx,
     Addr *addr, uint16_t *port);
 
-// TODO: comment
+// Initiates a connection to the specified address and port.
+// Returns 0 on success, or a negative error code:
+//   - PROC_ERROR_BADIDX index does not refer to a valid descriptor
+//   - PROC_ERROR_NOTSOCK descriptor is not a socket
+//   - PROC_ERROR_BADARG descriptor is already connected or listening
+//   - PROC_ERROR_ADDRUSED no ephemeral ports available for implicit bind
 int proc_connect(Proc *proc, int desc_idx,
     Addr addr, uint16_t port);
 
-// TODO: comment
+// Opens a file at the given path with the specified flags.
+// Returns a descriptor index on success, or a negative error code:
+//   - PROC_ERROR_FULL descriptor limit reached
+//   - PROC_ERROR_IO filesystem error
 int proc_open_file(Proc *proc, char *file, int flags);
 
-// TODO: comment
+// Opens a directory at the given path.
+// Returns a descriptor index on success, or a negative error code:
+//   - PROC_ERROR_FULL descriptor limit reached
+//   - PROC_ERROR_IO filesystem error
 int proc_open_dir(Proc *proc, char *file);
 
-// TODO: comment
+// Reads up to len bytes from a descriptor into dst.
+// Works for both files and connection sockets.
+// Returns the number of bytes read on success, or a negative error code:
+//   - PROC_ERROR_BADIDX invalid descriptor index
+//   - PROC_ERROR_BADARG descriptor type doesn't support reading
+//   - PROC_ERROR_ISDIR descriptor refers to a directory
+//   - PROC_ERROR_IO filesystem error
+//   - PROC_ERROR_WOULDBLOCK no data available (sockets)
+//   - PROC_ERROR_RESET connection reset by peer
+//   - PROC_ERROR_HANGUP connection closed by peer
+//   - PROC_ERROR_NOTCONN socket not connected
 int proc_read(Proc *proc, int desc_idx, char *dst, int len);
 
-// TODO: comment
+// Writes up to len bytes from src to a descriptor.
+// Works for both files and connection sockets.
+// Returns the number of bytes written on success, or a negative error code:
+//   - PROC_ERROR_BADIDX invalid descriptor index
+//   - PROC_ERROR_IO filesystem error
+//   - PROC_ERROR_WOULDBLOCK output buffer full (sockets)
+//   - PROC_ERROR_RESET connection reset by peer
+//   - PROC_ERROR_HANGUP connection closed by peer
+//   - PROC_ERROR_NOTCONN socket not connected
 int proc_write(Proc *proc, int desc_idx, char *src, int len);
 
-// TODO: comment
+// Receives up to len bytes from a socket into dst.
+// Returns the number of bytes received on success, or a negative error code:
+//   - PROC_ERROR_BADIDX invalid descriptor index
+//   - PROC_ERROR_NOTSOCK descriptor is not a socket
+//   - PROC_ERROR_WOULDBLOCK no data available
+//   - PROC_ERROR_RESET connection reset by peer
+//   - PROC_ERROR_HANGUP connection closed by peer
+//   - PROC_ERROR_NOTCONN socket not connected
 int proc_recv(Proc *proc, int desc_idx, char *dst, int len);
 
-// TODO: comment
+// Sends up to len bytes from src to a socket.
+// Returns the number of bytes sent on success, or a negative error code:
+//   - PROC_ERROR_BADIDX invalid descriptor index
+//   - PROC_ERROR_WOULDBLOCK output buffer full
+//   - PROC_ERROR_RESET connection reset by peer
+//   - PROC_ERROR_HANGUP connection closed by peer
+//   - PROC_ERROR_NOTCONN socket not connected
 int proc_send(Proc *proc, int desc_idx, char *src, int len);
 
 #endif // PROC_INCLUDED
