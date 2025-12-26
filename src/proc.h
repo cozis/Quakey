@@ -17,8 +17,8 @@
 // backlog argument is non-positive
 #define DEFAULT_BACKLOG 128
 
-#define FIRST_EPHIMERAL_PORT 10000
-#define LAST_EPHIMERAL_PORT  50000
+#define FIRST_EPHEMERAL_PORT 10000
+#define LAST_EPHEMERAL_PORT  50000
 
 typedef struct Proc Proc;
 typedef struct Desc Desc;
@@ -242,7 +242,7 @@ struct Proc {
     // that same platform
     OS os;
 
-    uint16_t next_ephimeral_port;
+    uint16_t next_ephemeral_port;
 
     // IP addresses associated to this process
     int  num_addrs;
@@ -346,7 +346,7 @@ int proc_close(Proc *proc, int desc_idx,
 //   - PROC_ERROR_BADFAM the address family is incompatile with the
 //     one specified when socket() was called
 //   - PROC_ERROR_NOTAVAIL either the address doesn't exist,
-//     is not local, or port 0 was passed and all ephimeral ports
+//     is not local, or port 0 was passed and all ports
 //     are in use
 //   - PROC_ERROR_ADDRUSED address is already in use
 int proc_bind(Proc *proc, int desc_idx,
@@ -359,7 +359,7 @@ int proc_bind(Proc *proc, int desc_idx,
 //   - PROC_ERROR_BADARG descriptor is a socket but of the wrong kind
 //   - PROC_ERROR_NOTSOCK descriptor is not a socket
 //   - PROC_ERROR_ADDRUSED the socket wasn't bound to an interface
-//     and no ephimeral ports are available
+//     and no ephemeral ports are available
 int proc_listen(Proc *proc, int desc_idx,
     int backlog);
 

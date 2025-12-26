@@ -1,3 +1,4 @@
 [ ] Make sure lfs is configured to be deterministic
 [ ] Randomly return EINTR
 [ ] Sometimes make send() and write() return 0
+[ ] Fix port byte order

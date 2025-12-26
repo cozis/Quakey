@@ -130,7 +130,7 @@ static int block_device_prog(const struct lfs_config *c,
 {
     Proc *proc = c->context;
 
-    // Block ofset
+    // Block offset
     lfs_off_t abs_off = block * c->block_size + off;
 
     // Bounds check
@@ -253,7 +253,7 @@ int proc_init(Proc *proc,
     proc->tick_func = tick_func;
     proc->free_func = free_func;
     proc->os = OS_UNSPECIFIED;
-    proc->next_ephimeral_port = FIRST_EPHIMERAL_PORT;
+    proc->next_ephemeral_port = FIRST_EPHEMERAL_PORT;
 
     proc->num_addrs = num_addrs;
     memcpy(proc->addrs, addrs, num_addrs * sizeof(Addr));
@@ -378,7 +378,7 @@ int proc_restart(Proc *proc, bool wipe_disk)
 
     // Reset other state
     proc->os = OS_UNSPECIFIED;
-    proc->next_ephimeral_port = FIRST_EPHIMERAL_PORT;
+    proc->next_ephemeral_port = FIRST_EPHEMERAL_PORT;
     proc->current_time = 0;
     proc->poll_count = 0;
     proc->poll_timeout = -1;
@@ -427,7 +427,7 @@ void proc_advance_network(Proc *proc)
                     transf = max_transf - desc->num_transf;
 
                 int num = socket_queue_move(&desc->input, &desc->peer->output, transf);
-                desc->num_transf += transf;
+                desc->num_transf += num;
             }
         }
     }
@@ -797,10 +797,10 @@ static bool addr_in_use(Proc *proc, Addr addr, uint16_t port)
 }
 
 // Returns 0 on error
-static uint16_t choose_ephimeral_port(Proc *proc, Addr addr)
+static uint16_t choose_ephemeral_port(Proc *proc, Addr addr)
 {
-    uint16_t first = proc->next_ephimeral_port;
-    uint16_t *next = &proc->next_ephimeral_port;
+    uint16_t first = proc->next_ephemeral_port;
+    uint16_t *next = &proc->next_ephemeral_port;
     do {
         uint16_t port = (*next)++;
         if (!addr_in_use(proc, addr, port))
@@ -857,7 +857,7 @@ int proc_bind(Proc *proc, int desc_idx, Addr addr, uint16_t port)
     // Check port
 
     if (port == 0) {
-        port = choose_ephimeral_port(proc, addr);
+        port = choose_ephemeral_port(proc, addr);
         if (port == 0)
             return PROC_ERROR_NOTAVAIL;
     } else {
@@ -904,7 +904,7 @@ int proc_listen(Proc *proc, int desc_idx, int backlog)
         // The bound_addr field already contains the right
         // family and a zero address. The port is 0, which
         // is not a valid value.
-        desc->bound_port = choose_ephimeral_port(proc, desc->bound_addr);
+        desc->bound_port = choose_ephemeral_port(proc, desc->bound_addr);
         if (desc->bound_port == 0)
             return PROC_ERROR_ADDRUSED;
     }
@@ -952,6 +952,8 @@ int proc_accept(Proc *proc, int desc_idx, Addr *addr, uint16_t *port)
 
     new_desc->type = DESC_SOCKET_C;
     new_desc->non_blocking = false;
+    new_desc->bound_addr = xxx;
+    new_desc->bound_port = xxx;
     new_desc->connect_addr = peer->bound_addr;
     new_desc->connect_port = peer->bound_port;
     new_desc->connect_time = proc->current_time;
@@ -999,7 +1001,7 @@ int proc_connect(Proc *proc, int desc_idx,
         // The bound_addr field already contains the right
         // family and a zero address. The port is 0, which
         // is not a valid value.
-        desc->bound_port = choose_ephimeral_port(proc, desc->bound_addr);
+        desc->bound_port = choose_ephemeral_port(proc, desc->bound_addr);
         if (desc->bound_port == 0)
             return PROC_ERROR_ADDRUSED;
     }
