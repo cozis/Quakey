@@ -507,17 +507,92 @@ int mock_linux_getsockopt(int fd, int level, int optname, void *optval, socklen_
 
 int mock_linux_remove(char *path)
 {
-    abortf("mock %s() not implemented yet\n", __func__); // TODO
+    Proc *proc = proc_current();
+    if (proc == NULL)
+        abortf("Call to %s() with no node scheduled\n", __func__);
+
+    ensure_os(proc, OS_LINUX, __func__);
+
+    int ret = lfs_remove(&proc->lfs, path);
+    if (ret < 0) {
+        switch (ret) {
+        case LFS_ERR_NOENT:
+            proc->errno_ = ENOENT;
+            return -1;
+        case LFS_ERR_NOTEMPTY:
+            proc->errno_ = ENOTEMPTY;
+            return -1;
+        default:
+            proc->errno_ = EIO;
+            return -1;
+        }
+    }
+
+    return 0;
 }
 
 int mock_linux_rename(char *oldpath, char *newpath)
 {
-    abortf("mock %s() not implemented yet\n", __func__); // TODO
+    Proc *proc = proc_current();
+    if (proc == NULL)
+        abortf("Call to %s() with no node scheduled\n", __func__);
+
+    ensure_os(proc, OS_LINUX, __func__);
+
+    int ret = lfs_rename(&proc->lfs, oldpath, newpath);
+    if (ret < 0) {
+        switch (ret) {
+        case LFS_ERR_NOENT:
+            proc->errno_ = ENOENT;
+            return -1;
+        case LFS_ERR_EXIST:
+            proc->errno_ = EEXIST;
+            return -1;
+        case LFS_ERR_NOTEMPTY:
+            proc->errno_ = ENOTEMPTY;
+            return -1;
+        case LFS_ERR_ISDIR:
+            proc->errno_ = EISDIR;
+            return -1;
+        default:
+            proc->errno_ = EIO;
+            return -1;
+        }
+    }
+
+    return 0;
 }
 
 int mock_linux_clock_gettime(clockid_t clockid, struct timespec *tp)
 {
-    abortf("mock %s() not implemented yet\n", __func__); // TODO
+    Proc *proc = proc_current();
+    if (proc == NULL)
+        abortf("Call to %s() with no node scheduled\n", __func__);
+
+    ensure_os(proc, OS_LINUX, __func__);
+
+    if (tp == NULL) {
+        proc->errno_ = EINVAL;
+        return -1;
+    }
+
+    // Both CLOCK_REALTIME and CLOCK_MONOTONIC use the same
+    // simulated time. In simulation, they're equivalent since
+    // we don't model wall-clock vs monotonic differences.
+    if (clockid != CLOCK_REALTIME && clockid != CLOCK_MONOTONIC) {
+        proc->errno_ = EINVAL;
+        return -1;
+    }
+
+    // Get current time and advance it slightly (simulates syscall cost)
+    Nanos now = proc_time(proc);
+
+    // Convert nanoseconds to timespec
+    // 1 second = 1,000,000,000 nanoseconds
+    tp->tv_sec  = (time_t)(now / 1000000000ULL);
+    tp->tv_nsec = (long)(now % 1000000000ULL);
+
+    return 0;
 }
 
 int mock_linux_flock(int fd, int op)
@@ -552,7 +627,32 @@ char *mock_linux_realpath(char *path, char *dst)
 
 int mock_linux_mkdir(char *path, mode_t mode)
 {
-    abortf("mock %s() not implemented yet\n", __func__); // TODO
+    Proc *proc = proc_current();
+    if (proc == NULL)
+        abortf("Call to %s() with no node scheduled\n", __func__);
+
+    ensure_os(proc, OS_LINUX, __func__);
+
+    // LittleFS doesn't use mode, but we accept it for API compatibility
+    (void)mode;
+
+    int ret = lfs_mkdir(&proc->lfs, path);
+    if (ret < 0) {
+        switch (ret) {
+        case LFS_ERR_EXIST:
+            proc->errno_ = EEXIST;
+            return -1;
+        case LFS_ERR_NOENT:
+            // Parent directory doesn't exist
+            proc->errno_ = ENOENT;
+            return -1;
+        default:
+            proc->errno_ = EIO;
+            return -1;
+        }
+    }
+
+    return 0;
 }
 
 int mock_linux_fcntl(int fd, int cmd, ...)
