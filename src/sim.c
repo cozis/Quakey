@@ -271,6 +271,8 @@ bool quakey_schedule_one(Quakey *sim)
     for (int i = 0; i < sim->num_procs; i++) {
 
         Proc *proc = sim->procs[sim->next_proc];
+        sim->next_proc = (sim->next_proc + 1) % sim->num_procs;
+
         if (proc_ready(proc)) {
 
             // TODO: with a certain probability, restart the process
@@ -280,8 +282,6 @@ bool quakey_schedule_one(Quakey *sim)
             }
             return true;
         }
-
-        sim->next_proc = (sim->next_proc + 1) % sim->num_procs;
     }
 
     return false;
