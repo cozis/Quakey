@@ -320,19 +320,23 @@ bool proc_has_addr(Proc *proc, Addr addr);
 // by a small duration.
 Nanos proc_time(Proc *proc);
 
-// Returns the descriptor index on success,
-// an error code on failure:
-//   PROC_ERROR_FULL: Descriptor limit reached
+// Creates a new socket descriptor with the specified address family.
+// Advances the process's current_time.
+// Returns the descriptor index on success, or an error code on failure:
+//   - PROC_ERROR_FULL descriptor limit reached
 int proc_create_socket(Proc *proc, AddrFamily family);
 
+// Closes a descriptor and frees associated resources.
+// Advances the process's current_time.
 // Returns 0 on success, or a negative code on error:
-//   - PROC_ERROR_BADIDX index doesn't refer to an
-//     open descriptor
-//   - PROC_ERROR_NOTSOCK the expect_socket flag is
-//     set and the descriptor doesn't refer to a socket
+//   - PROC_ERROR_BADIDX index doesn't refer to an open descriptor
+//   - PROC_ERROR_NOTSOCK the expect_socket flag is set and the
+//     descriptor doesn't refer to a socket
 int proc_close(Proc *proc, int desc_idx,
     bool expect_socket);
 
+// Binds a socket to a local address and port.
+// Advances the process's current_time.
 // Returns 0 on success or a negative code on failure:
 //   - PROC_ERROR_BADIDX the descriptor index does not refer
 //     to a valid descriptor
@@ -348,17 +352,19 @@ int proc_close(Proc *proc, int desc_idx,
 int proc_bind(Proc *proc, int desc_idx,
     Addr addr, uint16_t port);
 
+// Marks a socket as listening for incoming connections.
+// Advances the process's current_time.
 // Returns 0 on success and a negative code on error:
-//   - PROC_ERROR_BADIDX index does not refer to a valid
-//     descriptor
-//   - PROC_ERROR_BADARG descriptor is a socket but of the
-//     wrong kind
+//   - PROC_ERROR_BADIDX index does not refer to a valid descriptor
+//   - PROC_ERROR_BADARG descriptor is a socket but of the wrong kind
 //   - PROC_ERROR_NOTSOCK descriptor is not a socket
-//   - PROC_ERROR_ADDRUSED the socket wasn't bound to an
-//     interface and no ephimeral ports are available
+//   - PROC_ERROR_ADDRUSED the socket wasn't bound to an interface
+//     and no ephimeral ports are available
 int proc_listen(Proc *proc, int desc_idx,
     int backlog);
 
+// Accepts a pending connection from a listening socket.
+// Advances the process's current_time.
 // Returns a new descriptor index on success, or a negative error code:
 //   - PROC_ERROR_BADIDX index does not refer to a valid descriptor
 //   - PROC_ERROR_NOTSOCK descriptor is not a socket
@@ -369,6 +375,7 @@ int proc_accept(Proc *proc, int desc_idx,
     Addr *addr, uint16_t *port);
 
 // Initiates a connection to the specified address and port.
+// Advances the process's current_time.
 // Returns 0 on success, or a negative error code:
 //   - PROC_ERROR_BADIDX index does not refer to a valid descriptor
 //   - PROC_ERROR_NOTSOCK descriptor is not a socket
@@ -378,12 +385,14 @@ int proc_connect(Proc *proc, int desc_idx,
     Addr addr, uint16_t port);
 
 // Opens a file at the given path with the specified flags.
+// Advances the process's current_time.
 // Returns a descriptor index on success, or a negative error code:
 //   - PROC_ERROR_FULL descriptor limit reached
 //   - PROC_ERROR_IO filesystem error
 int proc_open_file(Proc *proc, char *file, int flags);
 
 // Opens a directory at the given path.
+// Advances the process's current_time.
 // Returns a descriptor index on success, or a negative error code:
 //   - PROC_ERROR_FULL descriptor limit reached
 //   - PROC_ERROR_IO filesystem error
@@ -391,6 +400,7 @@ int proc_open_dir(Proc *proc, char *file);
 
 // Reads up to len bytes from a descriptor into dst.
 // Works for both files and connection sockets.
+// Advances the process's current_time.
 // Returns the number of bytes read on success, or a negative error code:
 //   - PROC_ERROR_BADIDX invalid descriptor index
 //   - PROC_ERROR_BADARG descriptor type doesn't support reading
@@ -404,6 +414,7 @@ int proc_read(Proc *proc, int desc_idx, char *dst, int len);
 
 // Writes up to len bytes from src to a descriptor.
 // Works for both files and connection sockets.
+// Advances the process's current_time.
 // Returns the number of bytes written on success, or a negative error code:
 //   - PROC_ERROR_BADIDX invalid descriptor index
 //   - PROC_ERROR_IO filesystem error
@@ -414,6 +425,7 @@ int proc_read(Proc *proc, int desc_idx, char *dst, int len);
 int proc_write(Proc *proc, int desc_idx, char *src, int len);
 
 // Receives up to len bytes from a socket into dst.
+// Advances the process's current_time.
 // Returns the number of bytes received on success, or a negative error code:
 //   - PROC_ERROR_BADIDX invalid descriptor index
 //   - PROC_ERROR_NOTSOCK descriptor is not a socket
@@ -424,6 +436,7 @@ int proc_write(Proc *proc, int desc_idx, char *src, int len);
 int proc_recv(Proc *proc, int desc_idx, char *dst, int len);
 
 // Sends up to len bytes from src to a socket.
+// Advances the process's current_time.
 // Returns the number of bytes sent on success, or a negative error code:
 //   - PROC_ERROR_BADIDX invalid descriptor index
 //   - PROC_ERROR_WOULDBLOCK output buffer full
