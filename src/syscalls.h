@@ -152,6 +152,8 @@ typedef unsigned long u_long;
 
 struct stat;
 
+struct timespec;
+
 #define errno (*mock_errno_ptr())
 
 int    *mock_errno_ptr(void);

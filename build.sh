@@ -1,1 +1,1 @@
-gcc main.c src/syscalls.c src/proc.c src/sim.c -o main -Wall -Wextra -Iinclude -nostdlib
+gcc main.c src/syscalls.c src/proc.c src/sim.c src/3p/lfs.c src/3p/lfs_util.c src/3p/rpmalloc.c -o main -Wall -Wextra -Iinclude
