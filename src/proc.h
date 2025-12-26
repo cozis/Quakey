@@ -221,6 +221,10 @@ struct Proc {
     // Command-line arguments as a single dynamic string
     char *arg;
 
+    // TODO: comment
+    int   argc;
+    char *argv[PROC_ARGC_LIMIT];
+
     // Pointers to program code
     QuakeyInitFunc init_func;
     QuakeyTickFunc tick_func;

@@ -2,3 +2,5 @@
 [ ] Randomly return EINTR
 [ ] Sometimes make send() and write() return 0
 [ ] Fix port byte order
+[ ] Handle socket_queue_init failures
+[ ] Convert various flags

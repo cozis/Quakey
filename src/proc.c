@@ -280,6 +280,7 @@ int proc_init(Proc *proc,
     proc->arg = strdup(arg);
     if (proc->arg == NULL)
         return -1;
+    proc->argc = split_args(proc->arg, proc->argv, PROC_ARGC_LIMIT);
 
     proc->init_func = init_func;
     proc->tick_func = tick_func;
@@ -298,8 +299,10 @@ int proc_init(Proc *proc,
 
     proc->disk_size = disk_size;
     proc->disk_data = rpmalloc(disk_size);
-    if (proc->disk_data == NULL)
+    if (proc->disk_data == NULL) {
+        rpfree(proc->arg);
         return -1;
+    }
 
     // Zero out memory to make sure operations are deterministic
     memset(proc->disk_data, 0, disk_size);
@@ -330,6 +333,7 @@ int proc_init(Proc *proc,
         ret = lfs_mount(&proc->lfs, &proc->lfs_cfg);
         if (ret) {
             rpfree(proc->disk_data);
+            rpfree(proc->arg);
             return -1;
         }
     }
@@ -342,19 +346,18 @@ int proc_init(Proc *proc,
     if (state == NULL) {
         lfs_unmount(&proc->lfs);
         rpfree(proc->disk_data);
+        rpfree(proc->arg);
         return -1;
     }
 
-    char *argv[PROC_ARGC_LIMIT];
-    int argc = split_args(proc->arg, argv, PROC_ARGC_LIMIT);
-
     current_proc___ = proc;
-    ret = init_func(state, argc, argv, proc->poll_array, PROC_DESC_LIMIT, &proc->poll_count, &proc->poll_timeout);
+    ret = init_func(state, proc->argc, proc->argv, proc->poll_array, PROC_DESC_LIMIT, &proc->poll_count, &proc->poll_timeout);
     current_proc___ = NULL;
     if (ret < 0) {
         rpfree(state);
         lfs_unmount(&proc->lfs);
         rpfree(proc->disk_data);
+        rpfree(proc->arg);
         return -1;
     }
 
@@ -432,11 +435,8 @@ int proc_restart(Proc *proc, bool wipe_disk)
         return -1;
     }
 
-    char *argv[PROC_ARGC_LIMIT];
-    int argc = split_args(proc->arg, argv, PROC_ARGC_LIMIT);
-
     current_proc___ = proc;
-    ret = proc->init_func(state, argc, argv, proc->poll_array, PROC_DESC_LIMIT, &proc->poll_count, &proc->poll_timeout);
+    ret = proc->init_func(state, proc->argc, proc->argv, proc->poll_array, PROC_DESC_LIMIT, &proc->poll_count, &proc->poll_timeout);
     current_proc___ = NULL;
     if (ret < 0) {
         rpfree(state);
@@ -474,11 +474,18 @@ void proc_advance_network(Proc *proc)
                         desc->rst = true; // TODO: this isn't exactly correct. This should mark that the host is unreachable
                         continue;
                     }
-                    Proc *peer_proc = proc->sim->procs[host_idx];
+                    Proc *peer_proc = proc->sim->procs[idx];
 
                     Desc *peer = proc_find_desc_bound_to(peer_proc, desc->connect_addr, desc->connect_port);
                     if (peer == NULL) {
                         // Peer host exists but the port isn't open. Reset the connection.
+                        desc->rst = true;
+                        continue;
+                    }
+
+                    assert(peer->type == DESC_SOCKET_L);
+                    if (accept_queue_push(&peer->accept_queue, desc) < 0) {
+                        // Accept queue is full
                         desc->rst = true;
                         continue;
                     }
@@ -546,7 +553,7 @@ bool proc_ready(Proc *proc)
             }
             if (events & POLLOUT) {
                 if (!socket_queue_full(&desc->output) && is_connected_and_accepted(desc))
-                return true;
+                    return true;
             }
             break;
         case DESC_FILE:
@@ -1066,6 +1073,9 @@ int proc_accept(Proc *proc, int desc_idx, Addr *addr, uint16_t *port)
     socket_queue_init(&new_desc->input, 1<<12);
     socket_queue_init(&new_desc->output, 1<<12);
     proc->num_desc++;
+
+    // Update the peer's end of the connection
+    peer->peer = new_desc;
 
     proc->current_time += pick_accept_duration(proc);
     return new_desc_idx;

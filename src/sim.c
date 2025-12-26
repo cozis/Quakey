@@ -201,6 +201,7 @@ void quakey_free(Quakey *sim)
         proc_free(sim->procs[i]);
 
     rpfree(sim->procs);
+    free(sim);
 }
 
 int quakey_spawn(Quakey *sim, QuakeySpawnConfig config, char *arg)
