@@ -233,7 +233,6 @@ int quakey_spawn(Quakey *sim, QuakeySpawnConfig config, char *arg)
         arg
     );
     if (ret < 0) {
-        rpfree(arg);
         rpfree(proc);
         return -1;
     }
@@ -242,7 +241,6 @@ int quakey_spawn(Quakey *sim, QuakeySpawnConfig config, char *arg)
         int max_procs = sim->max_procs ? 2 * sim->max_procs : 8;
         Proc **procs = rprealloc(sim->procs, sizeof(Proc*) * max_procs);
         if (procs == NULL) {
-            rpfree(arg);
             proc_free(proc);
             return -1;
         }
@@ -251,8 +249,6 @@ int quakey_spawn(Quakey *sim, QuakeySpawnConfig config, char *arg)
     }
 
     sim->procs[sim->num_procs++] = proc;
-
-    rpfree(arg);
     return 0;
 }
 
