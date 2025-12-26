@@ -6,6 +6,7 @@
 
 static void desc_free(Desc *desc, lfs_t *lfs, bool rst);
 static bool accept_queue_empty(AcceptQueue *queue);
+static bool is_bound_to(Desc *desc, Addr addr, uint16_t port);
 
 static Proc *current_proc___;
 
@@ -450,9 +451,6 @@ int proc_restart(Proc *proc, bool wipe_disk)
 
 void proc_advance_network(Proc *proc)
 {
-    // TODO: the changes of this function should not
-    //       depend on how many times it is called but
-    //       how much time has passed
     for (int i = 0, j = 0; j < proc->num_desc; i++) {
 
         Desc *desc = &proc->desc[i];
@@ -467,7 +465,26 @@ void proc_advance_network(Proc *proc)
             // Not connected
             if (!desc->rst && !desc->hup) {
                 // Still waiting
-                // TODO: try to complete
+                if (desc->connect_time + desc->connect_delay < proc->current_time) {
+
+                    // Resolve connect()
+
+                    int idx = sim_find_host(proc->sim, desc->connect_addr);
+                    if (idx < 0) {
+                        desc->rst = true; // TODO: this isn't exactly correct. This should mark that the host is unreachable
+                        continue;
+                    }
+                    Proc *peer_proc = proc->sim->procs[host_idx];
+
+                    Desc *peer = proc_find_desc_bound_to(peer_proc, desc->connect_addr, desc->connect_port);
+                    if (peer == NULL) {
+                        // Peer host exists but the port isn't open. Reset the connection.
+                        desc->rst = true;
+                        continue;
+                    }
+
+                    desc->peer = peer; // Resolved!
+                }
             }
         } else {
             if (desc->peer->type == DESC_SOCKET_C) {
@@ -568,6 +585,22 @@ bool proc_has_addr(Proc *proc, Addr addr)
             return true;
     }
     return false;
+}
+
+Desc *proc_find_desc_bound_to(Proc *proc, Addr addr, uint16_t port)
+{
+    for (int i = 0, j = 0; j < proc->num_desc; i++) {
+
+        Desc *desc = &proc->desc[i];
+        if (desc->type == DESC_EMPTY)
+            continue;
+        j++;
+
+        if (is_bound_to(desc, addr, port))
+            return desc;
+    }
+
+    return NULL;
 }
 
 static int accept_queue_init(AcceptQueue *queue, int capacity)

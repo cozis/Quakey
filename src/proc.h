@@ -317,6 +317,9 @@ int *proc_errno_ptr(Proc *proc);
 // to this process.
 bool proc_has_addr(Proc *proc, Addr addr);
 
+// TODO: comment
+Desc *proc_find_desc_bound_to(Proc *proc, Addr addr, uint16_t port);
+
 // Returns the current simulated time in nanoseconds and advances it
 // by a small duration.
 Nanos proc_time(Proc *proc);
