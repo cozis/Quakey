@@ -129,6 +129,9 @@ typedef struct {
 
 struct Desc {
 
+    // Parent process object. This is set once at startup
+    Proc *proc;
+
     /////////////////////////////////////////
     // General descriptor fields
 
@@ -269,6 +272,9 @@ struct Proc {
     struct pollfd poll_array[PROC_DESC_LIMIT];
     int           poll_count;
     int           poll_timeout;
+
+    // Last time poll() was called
+    Nanos poll_call_time;
 
     // Current error number
     int errno_;

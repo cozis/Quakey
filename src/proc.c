@@ -2,9 +2,13 @@
 #include <string.h>
 #include <assert.h>
 
+#include "sim.h"
 #include "proc.h"
 
+#define MIN(X, Y) ((X) < (Y) ? (X) : (Y))
+
 static void desc_free(Desc *desc, lfs_t *lfs, bool rst);
+static int  accept_queue_push(AcceptQueue *queue, Desc *desc);
 static bool accept_queue_empty(AcceptQueue *queue);
 static bool is_bound_to(Desc *desc, Addr addr, uint16_t port);
 
@@ -294,8 +298,10 @@ int proc_init(Proc *proc,
     proc->current_time = 0;
 
     proc->num_desc = 0;
-    for (int i = 0; i < PROC_DESC_LIMIT; i++)
+    for (int i = 0; i < PROC_DESC_LIMIT; i++) {
+        proc->desc[i].proc = proc;
         proc->desc[i].type = DESC_EMPTY;
+    }
 
     proc->disk_size = disk_size;
     proc->disk_data = rpmalloc(disk_size);
@@ -340,6 +346,7 @@ int proc_init(Proc *proc,
 
     proc->poll_count = 0;
     proc->poll_timeout = -1;
+    proc->poll_call_time = 0;
     proc->errno_ = 0;
 
     void *state = rpmalloc(state_size);
@@ -424,6 +431,7 @@ int proc_restart(Proc *proc, bool wipe_disk)
     proc->current_time = 0;
     proc->poll_count = 0;
     proc->poll_timeout = -1;
+    proc->poll_call_time = 0;
     proc->errno_ = 0;
 
     // Allocate and initialize new state
@@ -497,7 +505,11 @@ void proc_advance_network(Proc *proc)
             if (desc->peer->type == DESC_SOCKET_C) {
                 // Receive some bytes from peer
 
-                Nanos elapsed = proc->current_time - desc->connect_time;
+                // Preserve causality by considering the lower time
+                // of the communicating processes
+                Nanos effective_time = MIN(proc->current_time, desc->peer->proc->current_time);
+
+                Nanos elapsed = effective_time - desc->connect_time;
                 uint64_t max_transf = (desc->bytes_per_sec * elapsed) / 1000000000;
 
                 int transf = 0;
@@ -513,6 +525,7 @@ void proc_advance_network(Proc *proc)
 
 int proc_tick(Proc *proc)
 {
+    proc->poll_call_time = proc->current_time;
     set_revents_in_poll_array(proc);
     current_proc___ = proc;
     int ret = proc->tick_func(proc->state, proc->poll_array, PROC_DESC_LIMIT, &proc->poll_count, &proc->poll_timeout);

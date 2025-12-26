@@ -4,6 +4,9 @@
 #include "proc.h"
 #include "3p/rpmalloc.h"
 
+// Forward-declare here to avoid including stdlib.h
+void qsort(void *base, size_t nmemb, size_t size, int (*compar)(const void *, const void *));
+
 static bool is_digit(char c)
 {
     return c >= '0' && c <= '9';
@@ -185,8 +188,6 @@ int quakey_init(Quakey **psim)
         return -1;
 
     sim->next_pid = PID_MIN;
-    sim->current_time_ns = START_TIME;
-    sim->next_proc = 0;
     sim->num_procs = 0;
     sim->max_procs = 0;
     sim->procs = NULL;
@@ -201,7 +202,7 @@ void quakey_free(Quakey *sim)
         proc_free(sim->procs[i]);
 
     rpfree(sim->procs);
-    free(sim);
+    rpfree(sim);
 }
 
 int quakey_spawn(Quakey *sim, QuakeySpawnConfig config, char *arg)
@@ -253,6 +254,15 @@ int quakey_spawn(Quakey *sim, QuakeySpawnConfig config, char *arg)
     return 0;
 }
 
+static int compare_proc_times(const void *p1, const void *p2)
+{
+    Proc *proc1 = *(Proc**)p1;
+    Proc *proc2 = *(Proc**)p2;
+    if (proc1->current_time < proc2->current_time) return -1;
+    if (proc1->current_time > proc2->current_time) return  1;
+    return 0;
+}
+
 bool quakey_schedule_one(Quakey *sim)
 {
     if (sim->num_procs == 0)
@@ -261,19 +271,13 @@ bool quakey_schedule_one(Quakey *sim)
     for (int i = 0; i < sim->num_procs; i++)
         proc_advance_network(sim->procs[i]);
 
-    assert(sim->next_proc >= 0);
-    assert(sim->next_proc < sim->num_procs);
+    // Sort processes based on their time
+    qsort(sim->procs, sim->num_procs, sizeof(Proc*), compare_proc_times);
 
     // Process the next ready process
     for (int i = 0; i < sim->num_procs; i++) {
-
-        Proc *proc = sim->procs[sim->next_proc];
-        sim->next_proc = (sim->next_proc + 1) % sim->num_procs;
-
+        Proc *proc = sim->procs[i];
         if (proc_ready(proc)) {
-
-            // TODO: with a certain probability, restart the process
-
             if (proc_tick(proc) < 0) {
                 assert(0); // TODO
             }
@@ -281,7 +285,35 @@ bool quakey_schedule_one(Quakey *sim)
         }
     }
 
-    return false;
+    // If we reached this point, no processes were
+    // ready, so advance the time until a timeout occurs
+
+    // Find the process with the most imminent wakeup time
+    Proc *chosen_proc = NULL;
+    Nanos chosen_wakeup = 0;
+    for (int i = 0; i < sim->num_procs; i++) {
+
+        Proc *proc = sim->procs[i];
+        if (proc->poll_timeout < 0)
+            continue; // No wakeup time set for this process
+
+        Nanos wakeup_time = proc->poll_call_time + proc->poll_timeout * 1000000;
+        assert(wakeup_time > proc->current_time);
+
+        if (chosen_proc == NULL || wakeup_time < chosen_wakeup) {
+            chosen_proc = proc;
+            chosen_wakeup = wakeup_time;
+        }
+    }
+    if (chosen_proc == NULL)
+        return false;
+
+    for (int i = 0; i < sim->num_procs; i++)
+        if (sim->procs[i]->current_time < chosen_wakeup)
+            sim->procs[i]->current_time = chosen_wakeup;
+
+    proc_tick(chosen_proc);
+    return true;
 }
 
 int sim_find_host(Quakey *sim, Addr addr)

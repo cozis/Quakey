@@ -9,7 +9,6 @@
 
 #define PID_MIN 300
 #define PID_MAX 10000
-#define START_TIME 1
 
 _Static_assert(PID_MIN >= 0);
 _Static_assert(PID_MAX <= INT_MAX);
@@ -21,12 +20,6 @@ struct Quakey {
     // Program ID are allocated from PID_MIN to
     // PID_MAX (inclusive) with wrap-around.
     int next_pid;
-
-    // Current simulation time in nanoseconds
-    uint64_t current_time_ns;
-
-    // Next process to be scheduled
-    int next_proc;
 
     // List of process states. The "procs" array is
     // dynamically allocated. The "max_procs"

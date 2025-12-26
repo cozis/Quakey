@@ -4,3 +4,4 @@
 [ ] Fix port byte order
 [ ] Handle socket_queue_init failures
 [ ] Convert various flags
+[ ] Instead of instantly restarting a process, keep it dead for a bit
