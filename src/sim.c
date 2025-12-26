@@ -1,12 +1,12 @@
 #include <assert.h>
-#include <stdlib.h>
 
 #include "sim.h"
 #include "proc.h"
+#include "3p/rpmalloc.h"
 
 int quakey_sim_init(QuakeySim **psim)
 {
-    QuakeySim *sim = malloc(sizeof(QuakeySim));
+    QuakeySim *sim = rpmalloc(sizeof(QuakeySim));
     if (sim == NULL)
         return -1;
 
@@ -26,23 +26,23 @@ void quakey_sim_free(QuakeySim *sim)
     for (int i = 0; i < sim->num_procs; i++)
         proc_free(sim->procs[i]);
 
-    free(sim->procs);
+    rpfree(sim->procs);
 }
 
 int quakey_sim_spawn(QuakeySim *sim, QuakeySpawnConfig config, char *arg)
 {
-    Proc *proc = malloc(sizeof(Proc));
+    Proc *proc = rpmalloc(sizeof(Proc));
     if (proc == NULL)
         return -1;
 
     if (config.num_addrs > PROC_IPADDR_LIMIT) {
-        free(proc);
+        rpfree(proc);
         return -1;
     }
     Addr parsed_addrs[PROC_IPADDR_LIMIT];
     for (int i = 0; i < config.num_addrs; i++) {
         if (addr_parse(config.addrs[i], &parsed_addrs[i]) < 0) {
-            free(proc);
+            rpfree(proc);
             return -1;
         }
     }
@@ -59,16 +59,16 @@ int quakey_sim_spawn(QuakeySim *sim, QuakeySpawnConfig config, char *arg)
         arg
     );
     if (ret < 0) {
-        free(arg);
-        free(proc);
+        rpfree(arg);
+        rpfree(proc);
         return -1;
     }
 
     if (sim->num_procs == sim->max_procs) {
         int max_procs = sim->max_procs ? 2 * sim->max_procs : 8;
-        Proc **procs = realloc(sim->procs, sizeof(Proc*) * max_procs);
+        Proc **procs = rprealloc(sim->procs, sizeof(Proc*) * max_procs);
         if (procs == NULL) {
-            free(arg);
+            rpfree(arg);
             proc_free(proc);
             return -1;
         }
@@ -78,7 +78,7 @@ int quakey_sim_spawn(QuakeySim *sim, QuakeySpawnConfig config, char *arg)
 
     sim->procs[sim->num_procs++] = proc;
 
-    free(arg);
+    rpfree(arg);
     return 0;
 }
 

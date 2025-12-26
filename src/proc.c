@@ -16,7 +16,7 @@ Proc *proc_current(void)
 
 static int socket_queue_init(SocketQueue *queue, int size)
 {
-    char *data = malloc(size);
+    char *data = rpmalloc(size);
     if (data == NULL)
         return -1; // TODO: this should abort
     queue->head = 0;
@@ -28,7 +28,7 @@ static int socket_queue_init(SocketQueue *queue, int size)
 
 static void socket_queue_free(SocketQueue *queue)
 {
-    free(queue->data);
+    rpfree(queue->data);
 }
 
 static char *socket_queue_read_buf(SocketQueue *queue, int *num)
@@ -296,7 +296,7 @@ int proc_init(Proc *proc,
         proc->desc[i].type = DESC_EMPTY;
 
     proc->disk_size = disk_size;
-    proc->disk_data = malloc(disk_size);
+    proc->disk_data = rpmalloc(disk_size);
     if (proc->disk_data == NULL)
         return -1;
 
@@ -328,18 +328,19 @@ int proc_init(Proc *proc,
         lfs_format(&proc->lfs, &proc->lfs_cfg); // TODO: can this fail?
         ret = lfs_mount(&proc->lfs, &proc->lfs_cfg);
         if (ret) {
-            free(proc->disk_data);
+            rpfree(proc->disk_data);
             return -1;
         }
     }
 
     proc->poll_count = 0;
     proc->poll_timeout = -1;
+    proc->errno_ = 0;
 
-    void *state = malloc(state_size);
+    void *state = rpmalloc(state_size);
     if (state == NULL) {
         lfs_unmount(&proc->lfs);
-        free(proc->disk_data);
+        rpfree(proc->disk_data);
         return -1;
     }
 
@@ -350,9 +351,9 @@ int proc_init(Proc *proc,
     ret = init_func(state, argc, argv, proc->poll_array, PROC_DESC_LIMIT, &proc->poll_count, &proc->poll_timeout);
     current_proc___ = NULL;
     if (ret < 0) {
-        free(state);
+        rpfree(state);
         lfs_unmount(&proc->lfs);
-        free(proc->disk_data);
+        rpfree(proc->disk_data);
         return -1;
     }
 
@@ -367,12 +368,12 @@ void proc_free(Proc *proc)
     proc->free_func(proc->state);
     current_proc___ = NULL;
 
-    free(proc->arg);
+    rpfree(proc->arg);
 
-    free(proc->state);
+    rpfree(proc->state);
 
     lfs_unmount(&proc->lfs);
-    free(proc->disk_data);
+    rpfree(proc->disk_data);
 
     for (int i = 0; i < PROC_DESC_LIMIT; i++)
         if (proc->desc[i].type != DESC_EMPTY)
@@ -385,7 +386,7 @@ int proc_restart(Proc *proc, bool wipe_disk)
     current_proc___ = proc;
     proc->free_func(proc->state);
     current_proc___ = NULL;
-    free(proc->state);
+    rpfree(proc->state);
 
     // Close all descriptors
     for (int i = 0; i < PROC_DESC_LIMIT; i++) {
@@ -419,13 +420,14 @@ int proc_restart(Proc *proc, bool wipe_disk)
     proc->current_time = 0;
     proc->poll_count = 0;
     proc->poll_timeout = -1;
+    proc->errno_ = 0;
 
     // Allocate and initialize new state
 
-    void *state = malloc(proc->state_size);
+    void *state = rpmalloc(proc->state_size);
     if (state == NULL) {
         lfs_unmount(&proc->lfs);
-        free(proc->disk_data);
+        rpfree(proc->disk_data);
         return -1;
     }
 
@@ -433,12 +435,12 @@ int proc_restart(Proc *proc, bool wipe_disk)
     int argc = split_args(proc->arg, argv, PROC_ARGC_LIMIT);
 
     current_proc___ = proc;
-    ret = init_func(state, argc, argv, proc->poll_array, PROC_DESC_LIMIT, &proc->poll_count, &proc->poll_timeout);
+    ret = proc->init_func(state, argc, argv, proc->poll_array, PROC_DESC_LIMIT, &proc->poll_count, &proc->poll_timeout);
     current_proc___ = NULL;
     if (ret < 0) {
-        free(state);
+        rpfree(state);
         lfs_unmount(&proc->lfs);
-        free(proc->disk_data);
+        rpfree(proc->disk_data);
         return -1;
     }
 
@@ -544,6 +546,11 @@ bool proc_ready(Proc *proc)
     return false;
 }
 
+int *proc_errno_ptr(Proc *proc)
+{
+    return &proc->errno_;
+}
+
 static bool addr_eql(Addr a1, Addr a2)
 {
     if (a1.family != a2.family)
@@ -565,7 +572,7 @@ bool proc_has_addr(Proc *proc, Addr addr)
 
 static int accept_queue_init(AcceptQueue *queue, int capacity)
 {
-    Desc **entries = malloc(capacity * sizeof(Desc*));
+    Desc **entries = rpmalloc(capacity * sizeof(Desc*));
     if (entries == NULL)
         return -1;
     queue->head = 0;
@@ -577,7 +584,7 @@ static int accept_queue_init(AcceptQueue *queue, int capacity)
 
 static void accept_queue_free(AcceptQueue *queue)
 {
-    free(queue->entries);
+    rpfree(queue->entries);
 }
 
 static Desc **accept_queue_peek(AcceptQueue *queue, int idx)

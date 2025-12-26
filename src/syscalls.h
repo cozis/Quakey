@@ -1,11 +1,29 @@
 #ifndef SYSCALLS_INCLUDED
 #define SYSCALLS_INCLUDED
 
-#include <errno.h>
-
 #include "proc.h"
 
 #define MAX_PATH 1024
+
+enum {
+    NO_ERROR = 0,
+    EBADF,
+    EINVAL,
+    EISDIR,
+    EIO,
+    ENOTSOCK,
+    ENOTCONN,
+    EISCONN,
+    ECONNRESET,
+    EAGAIN,
+    EPIPE,
+    EMFILE,
+    EAFNOSUPPORT,
+    EADDRINUSE,
+    EINPROGRESS,
+    ENOENT,
+    EADDRNOTAVAIL,
+};
 
 enum {
     AF_INET,
@@ -14,11 +32,6 @@ enum {
 
 enum {
     SOCK_STREAM,
-};
-
-enum {
-    POLLIN  = 1<<0,
-    POLLOUT = 1<<1,
 };
 
 typedef int            BOOL;
@@ -133,7 +146,15 @@ struct sockaddr_in6 {
 	uint32_t        sin6_scope_id;
 };
 
+typedef int clockid_t;
+typedef int mode_t;
+typedef unsigned long u_long;
+
 struct stat;
+
+#define errno (*mock_errno_ptr())
+
+int    *mock_errno_ptr(void);
 
 int    mock_linux_socket(int domain, int type, int protocol);
 int    mock_linux_close(int fd);

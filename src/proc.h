@@ -6,6 +6,7 @@
 
 #include <quakey.h>
 
+#include "poll.h"
 #include "3p/lfs.h"
 
 #define PROC_IPADDR_LIMIT 4
@@ -212,17 +213,6 @@ struct Desc {
     /////////////////////////////////////////
 };
 
-struct pollfd {
-	int fd;
-	short events;
-	short revents;
-};
-
-enum {
-    POLLIN  = 1<<0,
-    POLLOUT = 1<<1,
-};
-
 struct Proc {
 
     // Parent simulation
@@ -275,6 +265,9 @@ struct Proc {
     struct pollfd poll_array[PROC_DESC_LIMIT];
     int           poll_count;
     int           poll_timeout;
+
+    // Current error number
+    int errno_;
 };
 
 // Returns a pointer to the currently scheduled process, or NULL
@@ -316,6 +309,9 @@ int proc_tick(Proc *proc);
 // Returns true if the process has pending events to handle, i.e., if any
 // polled descriptors have ready events or if the poll timeout is zero.
 bool proc_ready(Proc *proc);
+
+// Returns the current error number
+int *proc_errno_ptr(Proc *proc);
 
 // Returns true if the given address is one of the addresses assigned
 // to this process.

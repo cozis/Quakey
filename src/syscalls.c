@@ -1,5 +1,4 @@
 #include <stdio.h>
-#include <stdlib.h>
 #include <stdarg.h>
 #include <assert.h>
 
@@ -11,7 +10,7 @@ static void abortf(const char *fmt, ...)
     va_start(args, fmt);
     vfprintf(stderr, fmt, args);
     va_end(args);
-    abort();
+    __builtin_trap();
 }
 
 static char *osname(OS os)
@@ -37,6 +36,15 @@ static void ensure_os(Proc *proc, OS os, const char *func)
         if (proc->os != os)
             abortf("Call to %s() not from a %s node\n", func, osname(os));
     }
+}
+
+int *mock_errno_ptr(void)
+{
+    Proc *proc = proc_current();
+    if (proc == NULL)
+        abortf("Call to %s() with no node scheduled\n", __func__);
+
+    return proc_errno_ptr(proc);
 }
 
 int mock_linux_socket(int domain, int type, int protocol)
@@ -70,12 +78,12 @@ int mock_linux_socket(int domain, int type, int protocol)
     if (ret < 0) {
         switch (ret) {
         case PROC_ERROR_FULL:
-            errno = EMFILE;
+            proc->errno_ = EMFILE;
             return -1;
         default:
             break;
         }
-        errno = EIO;
+        proc->errno_ = EIO;
         return -1;
     }
     int desc_idx = ret;
@@ -96,12 +104,12 @@ int mock_linux_close(int fd)
     if (ret < 0) {
         switch (ret) {
         case PROC_ERROR_BADIDX:
-            errno = EBADF;
+            proc->errno_ = EBADF;
             return -1;
         default:
             break;
         }
-        errno = EIO;
+        proc->errno_ = EIO;
         return -1;
     }
 
@@ -115,10 +123,8 @@ static int convert_addr(void *addr, size_t addr_len,
     switch (family) {
     case AF_INET:
         {
-            if (addr_len != sizeof(struct sockaddr_in)) {
-                errno = EINVAL;
+            if (addr_len != sizeof(struct sockaddr_in))
                 return -1;
-            }
             struct sockaddr_in *p = addr;
             converted_addr->family = ADDR_FAMILY_IPV4;
             converted_addr->ipv4   = *(AddrIPv4*) &p->sin_addr;
@@ -127,10 +133,8 @@ static int convert_addr(void *addr, size_t addr_len,
         break;
     case AF_INET6:
         {
-            if (addr_len != sizeof(struct sockaddr_in6)) {
-                errno = EINVAL;
+            if (addr_len != sizeof(struct sockaddr_in6))
                 return -1;
-            }
             struct sockaddr_in6 *p = addr;
             converted_addr->family = ADDR_FAMILY_IPV6;
             converted_addr->ipv6   = *(AddrIPv6*) &p->sin6_addr;
@@ -154,35 +158,37 @@ int mock_linux_bind(int fd, void *addr, size_t addr_len)
     Addr     converted_addr;
     uint16_t converted_port;
     int ret = convert_addr(addr, addr_len, &converted_addr, &converted_port);
-    if (ret < 0)
+    if (ret < 0) {
+        proc->errno_ = EINVAL;
         return ret;
+    }
 
     int desc_idx = fd;
     ret = proc_bind(proc, desc_idx, converted_addr, converted_port);
     if (ret < 0) {
         switch (ret) {
         case PROC_ERROR_BADIDX:
-            errno = EBADF;
+            proc->errno_ = EBADF;
             return -1;
         case PROC_ERROR_NOTSOCK:
-            errno = ENOTSOCK;
+            proc->errno_ = ENOTSOCK;
             return -1;
         case PROC_ERROR_CANTBIND:
-            errno = EINVAL;
+            proc->errno_ = EINVAL;
             return -1;
         case PROC_ERROR_BADFAM:
-            errno = EAFNOSUPPORT;
+            proc->errno_ = EAFNOSUPPORT;
             return -1;
         case PROC_ERROR_NOTAVAIL:
-            errno = EADDRNOTAVAIL;
+            proc->errno_ = EADDRNOTAVAIL;
             return -1;
         case PROC_ERROR_ADDRUSED:
-            errno = EADDRINUSE;
+            proc->errno_ = EADDRINUSE;
             return -1;
         default:
             break;
         }
-        errno = EIO;
+        proc->errno_ = EIO;
         return -1;
     }
 
@@ -202,19 +208,19 @@ int mock_linux_listen(int fd, int backlog)
     if (ret < 0) {
         switch (ret) {
         case PROC_ERROR_BADIDX:
-            errno = EBADF;
+            proc->errno_ = EBADF;
             return -1;
         case PROC_ERROR_BADARG:
-            errno = EINVAL;
+            proc->errno_ = EINVAL;
             return -1;
         case PROC_ERROR_NOTSOCK:
-            errno = ENOTSOCK;
+            proc->errno_ = ENOTSOCK;
             return -1;
         case PROC_ERROR_ADDRUSED:
-            errno = EADDRINUSE;
+            proc->errno_ = EADDRINUSE;
             return -1;
         }
-        errno = EIO;
+        proc->errno_ = EIO;
         return -1;
     }
 
@@ -232,8 +238,10 @@ int mock_linux_connect(int fd, void *addr, size_t addr_len)
     Addr     converted_addr;
     uint16_t converted_port;
     int ret = convert_addr(addr, addr_len, &converted_addr, &converted_port);
-    if (ret < 0)
-        return ret;
+    if (ret < 0) {
+        proc->errno_ = EINVAL;
+        return -1;
+    }
 
     // TODO: connect() operations are only allowed on non-blocking
     //       sockets
@@ -243,25 +251,25 @@ int mock_linux_connect(int fd, void *addr, size_t addr_len)
     if (ret < 0) {
         switch (ret) {
         case PROC_ERROR_BADIDX:
-            errno = EBADF;
+            proc->errno_ = EBADF;
             return -1;
         case PROC_ERROR_NOTSOCK:
-            errno = ENOTSOCK;
+            proc->errno_ = ENOTSOCK;
             return -1;
         case PROC_ERROR_BADARG:
-            errno = EISCONN;
+            proc->errno_ = EISCONN;
             return -1;
         case PROC_ERROR_ADDRUSED:
-            errno = EADDRINUSE;
+            proc->errno_ = EADDRINUSE;
             return -1;
         default:
             break;
         }
-        errno = EINPROGRESS;
+        proc->errno_ = EINPROGRESS;
         return -1;
     }
 
-    errno = EINPROGRESS;
+    proc->errno_ = EINPROGRESS;
     return -1;
 }
 
@@ -279,15 +287,15 @@ int mock_linux_open(char *path, int flags, int mode)
     if (ret < 0) {
         switch (ret) {
         case PROC_ERROR_FULL:
-            errno = EMFILE;
+            proc->errno_ = EMFILE;
             return -1;
         case PROC_ERROR_IO:
-            errno = EIO;
+            proc->errno_ = EIO;
             return -1;
         default:
             break;
         }
-        errno = ENOENT;
+        proc->errno_ = ENOENT;
         return -1;
     }
     int desc_idx = ret;
@@ -307,19 +315,19 @@ int mock_linux_read(int fd, char *dst, int len)
     if (ret < 0) {
         switch (ret) {
         case PROC_ERROR_BADIDX:
-            errno = EBADF;
+            proc->errno_ = EBADF;
             return -1;
         case PROC_ERROR_BADARG:
-            errno = EINVAL;
+            proc->errno_ = EINVAL;
             return -1;
         case PROC_ERROR_ISDIR:
-            errno = EISDIR;
+            proc->errno_ = EISDIR;
             return -1;
         case PROC_ERROR_IO:
-            errno = EIO;
+            proc->errno_ = EIO;
             return -1;
         }
-        errno = EIO;
+        proc->errno_ = EIO;
         return -1;
     }
 
@@ -338,15 +346,15 @@ int mock_linux_write(int fd, char *src, int len)
     if (ret < 0) {
         switch (ret) {
         case PROC_ERROR_BADIDX:
-            errno = EBADF;
+            proc->errno_ = EBADF;
             return -1;
         case PROC_ERROR_IO:
-            errno = EIO;
+            proc->errno_ = EIO;
             return -1;
         default:
             break;
         }
-        errno = EIO;
+        proc->errno_ = EIO;
         return -1;
     }
 
@@ -368,27 +376,27 @@ int mock_linux_recv(int fd, char *dst, int len, int flags)
     if (ret < 0) {
         switch (ret) {
         case PROC_ERROR_BADIDX:
-            errno = EBADF;
+            proc->errno_ = EBADF;
             return -1;
         case PROC_ERROR_NOTSOCK:
-            errno = ENOTSOCK;
+            proc->errno_ = ENOTSOCK;
             return -1;
         case PROC_ERROR_NOTCONN:
-            errno = ENOTCONN;
+            proc->errno_ = ENOTCONN;
             return -1;
         case PROC_ERROR_RESET:
-            errno = ECONNRESET;
+            proc->errno_ = ECONNRESET;
             return -1;
         case PROC_ERROR_HANGUP:
-            errno = 0;
+            proc->errno_ = 0;
             return 0;
         case PROC_ERROR_WOULDBLOCK:
-            errno = EAGAIN;
+            proc->errno_ = EAGAIN;
             return -1;
         default:
             break;
         }
-        errno = EIO;
+        proc->errno_ = EIO;
         return -1;
     }
 
@@ -411,21 +419,21 @@ int mock_linux_send(int fd, char *src, int len, int flags)
     if (ret < 0) {
         switch (ret) {
         case PROC_ERROR_BADIDX:
-            errno = EBADF;
+            proc->errno_ = EBADF;
             return -1;
         case PROC_ERROR_RESET:
-            errno = ECONNRESET;
+            proc->errno_ = ECONNRESET;
             return -1;
         case PROC_ERROR_HANGUP:
-            errno = EPIPE;
+            proc->errno_ = EPIPE;
             return -1;
         case PROC_ERROR_WOULDBLOCK:
-            errno = EAGAIN;
+            proc->errno_ = EAGAIN;
             return -1;
         default:
             break;
         }
-        errno = EIO;
+        proc->errno_ = EIO;
         return -1;
     }
 
@@ -446,24 +454,24 @@ int mock_linux_accept(int fd, void *addr, socklen_t *addr_len)
     if (ret < 0) {
         switch (ret) {
         case PROC_ERROR_BADIDX:
-            errno = EBADF;
+            proc->errno_ = EBADF;
             return -1;
         case PROC_ERROR_NOTSOCK:
-            errno = ENOTSOCK;
+            proc->errno_ = ENOTSOCK;
             return -1;
         case PROC_ERROR_BADARG:
-            errno = EINVAL;
+            proc->errno_ = EINVAL;
             return -1;
         case PROC_ERROR_FULL:
-            errno = EMFILE;
+            proc->errno_ = EMFILE;
             return -1;
         case PROC_ERROR_WOULDBLOCK:
-            errno = EAGAIN;
+            proc->errno_ = EAGAIN;
             return -1;
         default:
             break;
         }
-        errno = EIO;
+        proc->errno_ = EIO;
         return -1;
     }
     int new_fd = ret;
