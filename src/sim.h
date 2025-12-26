@@ -14,7 +14,7 @@
 _Static_assert(PID_MIN >= 0);
 _Static_assert(PID_MAX <= INT_MAX);
 
-struct QuakeySim {
+struct Quakey {
 
     // The next candidate program ID
     //
@@ -44,6 +44,6 @@ struct QuakeySim {
 
 // Returns the index of the host associated to the
 // given address. If no host is found, -1 is returned
-int sim_find_host(QuakeySim *sim, Addr addr);
+int sim_find_host(Quakey *sim, Addr addr);
 
 #endif // SIM_INCLUDED

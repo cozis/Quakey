@@ -4,13 +4,13 @@
 #include <stdbool.h>
 
 // Opaque simulation type
-typedef struct QuakeySim QuakeySim;
+typedef struct Quakey Quakey;
 
 // Start a simulation
-int quakey_sim_init(QuakeySim **psim);
+int quakey_init(Quakey **psim);
 
 // Stop a simulation
-void quakey_sim_free(QuakeySim *sim);
+void quakey_free(Quakey *sim);
 
 // Forward-declared for QuakeyInitFunc and QuakeyTickFunc
 struct pollfd;
@@ -39,9 +39,9 @@ typedef struct {
 } QuakeySpawnConfig;
 
 // Add a program to the simulation
-int quakey_sim_spawn(QuakeySim *sim, QuakeySpawnConfig config, char *arg);
+int quakey_spawn(Quakey *sim, QuakeySpawnConfig config, char *arg);
 
 // Schedule and executes one program, then returns
-bool quakey_sim_schedule_one(QuakeySim *sim);
+bool quakey_schedule_one(Quakey *sim);
 
 #endif // QUAKEY_INCLUDED

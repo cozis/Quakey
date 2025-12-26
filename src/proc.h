@@ -216,7 +216,7 @@ struct Desc {
 struct Proc {
 
     // Parent simulation
-    QuakeySim *sim;
+    Quakey *sim;
 
     // Command-line arguments as a single dynamic string
     char *arg;
@@ -279,7 +279,7 @@ Proc *proc_current(void);
 // immediately to set up the initial process state.
 // Returns 0 on success, -1 on failure (memory allocation or init failed).
 int proc_init(Proc *proc,
-    QuakeySim *sim,
+    Quakey *sim,
     int state_size,
     QuakeyInitFunc init_func,
     QuakeyTickFunc tick_func,

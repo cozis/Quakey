@@ -264,7 +264,7 @@ static int split_args(char *arg, char **argv, int max_argc)
 }
 
 int proc_init(Proc *proc,
-    QuakeySim *sim,
+    Quakey *sim,
     int state_size,
     QuakeyInitFunc init_func,
     QuakeyTickFunc tick_func,

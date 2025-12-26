@@ -35,8 +35,8 @@ static int example_proc_free(void *state)
 
 int main(void)
 {
-    QuakeySim *sim;
-    if (quakey_sim_init(&sim) < 0)
+    Quakey *sim;
+    if (quakey_init(&sim) < 0)
         return -1;
 
     QuakeySpawnConfig config = {
@@ -48,11 +48,11 @@ int main(void)
         .num_addrs = 1,
         .disk_size = 1<<20,
     };
-    quakey_sim_spawn(sim, config, "");
+    quakey_spawn(sim, config, "");
 
     for (;;)
-        quakey_sim_schedule_one(sim);
+        quakey_schedule_one(sim);
 
-    quakey_sim_free(sim);
+    quakey_free(sim);
     return 0;
 }

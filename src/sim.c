@@ -178,9 +178,9 @@ int addr_parse(char *src, Addr *dst)
     return -1;
 }
 
-int quakey_sim_init(QuakeySim **psim)
+int quakey_init(Quakey **psim)
 {
-    QuakeySim *sim = rpmalloc(sizeof(QuakeySim));
+    Quakey *sim = rpmalloc(sizeof(Quakey));
     if (sim == NULL)
         return -1;
 
@@ -195,7 +195,7 @@ int quakey_sim_init(QuakeySim **psim)
     return 0;
 }
 
-void quakey_sim_free(QuakeySim *sim)
+void quakey_free(Quakey *sim)
 {
     for (int i = 0; i < sim->num_procs; i++)
         proc_free(sim->procs[i]);
@@ -203,7 +203,7 @@ void quakey_sim_free(QuakeySim *sim)
     rpfree(sim->procs);
 }
 
-int quakey_sim_spawn(QuakeySim *sim, QuakeySpawnConfig config, char *arg)
+int quakey_spawn(Quakey *sim, QuakeySpawnConfig config, char *arg)
 {
     Proc *proc = rpmalloc(sizeof(Proc));
     if (proc == NULL)
@@ -256,7 +256,7 @@ int quakey_sim_spawn(QuakeySim *sim, QuakeySpawnConfig config, char *arg)
     return 0;
 }
 
-bool quakey_sim_schedule_one(QuakeySim *sim)
+bool quakey_schedule_one(Quakey *sim)
 {
     if (sim->num_procs == 0)
         return false;
@@ -287,7 +287,7 @@ bool quakey_sim_schedule_one(QuakeySim *sim)
     return false;
 }
 
-int sim_find_host(QuakeySim *sim, Addr addr)
+int sim_find_host(Quakey *sim, Addr addr)
 {
     for (int i = 0; i < sim->num_procs; i++)
         if (proc_has_addr(sim->procs[i], addr))
