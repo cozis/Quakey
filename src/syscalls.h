@@ -23,6 +23,8 @@ enum {
     EINPROGRESS,
     ENOENT,
     EADDRNOTAVAIL,
+    ENOTEMPTY,
+    EEXIST,
 };
 
 enum {
@@ -32,6 +34,18 @@ enum {
 
 enum {
     SOCK_STREAM,
+};
+
+enum {
+    CLOCK_REALTIME,
+    CLOCK_MONOTONIC,
+};
+
+typedef int64_t time_t;
+
+struct timespec {
+    time_t  tv_sec;   /* Seconds */
+    int64_t tv_nsec;  /* Nanoseconds [0, 999'999'999] */
 };
 
 typedef int            BOOL;

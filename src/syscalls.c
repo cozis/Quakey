@@ -589,8 +589,8 @@ int mock_linux_clock_gettime(clockid_t clockid, struct timespec *tp)
 
     // Convert nanoseconds to timespec
     // 1 second = 1,000,000,000 nanoseconds
-    tp->tv_sec  = (time_t)(now / 1000000000ULL);
-    tp->tv_nsec = (long)(now % 1000000000ULL);
+    tp->tv_sec  = (time_t)  (now / 1000000000ULL);
+    tp->tv_nsec = (int64_t) (now % 1000000000ULL);
 
     return 0;
 }

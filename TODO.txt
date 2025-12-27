@@ -6,3 +6,4 @@
 [ ] Convert various flags
 [ ] Instead of instantly restarting a process, keep it dead for a bit
 [ ] mock malloc, realloc, free
+[ ] Set the OS when spawning a process
