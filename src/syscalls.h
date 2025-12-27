@@ -27,6 +27,17 @@ enum {
     EEXIST,
 };
 
+// Linux open() flags
+enum {
+    O_RDONLY = 0,
+    O_WRONLY = 1,
+    O_RDWR   = 2,
+    O_CREAT  = 0x0040,
+    O_EXCL   = 0x0080,
+    O_TRUNC  = 0x0200,
+    O_APPEND = 0x0400,
+};
+
 enum {
     AF_INET,
     AF_INET6,

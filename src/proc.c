@@ -1163,9 +1163,7 @@ int proc_open_file(Proc *proc, char *path, int flags)
         return PROC_ERROR_FULL;
     Desc *desc = &proc->desc[desc_idx];
 
-    int converted_flags = 0; // TODO: convert flags
-
-    int ret = lfs_file_open(&proc->lfs, &desc->file, path, converted_flags);
+    int ret = lfs_file_open(&proc->lfs, &desc->file, path, flags);
     if (ret < 0) {
         assert(0); // TODO
     }

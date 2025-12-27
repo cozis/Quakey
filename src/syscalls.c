@@ -273,6 +273,29 @@ int mock_linux_connect(int fd, void *addr, size_t addr_len)
     return -1;
 }
 
+static int convert_linux_open_flags_to_lfs(int flags)
+{
+    int lfs_flags = 0;
+
+    // Convert access mode (lowest 2 bits)
+    // Linux: O_RDONLY=0, O_WRONLY=1, O_RDWR=2
+    // LFS:   LFS_O_RDONLY=1, LFS_O_WRONLY=2, LFS_O_RDWR=3
+    int access_mode = flags & 3;
+    lfs_flags = access_mode + 1;
+
+    // Convert other flags
+    if (flags & O_CREAT)
+        lfs_flags |= LFS_O_CREAT;
+    if (flags & O_EXCL)
+        lfs_flags |= LFS_O_EXCL;
+    if (flags & O_TRUNC)
+        lfs_flags |= LFS_O_TRUNC;
+    if (flags & O_APPEND)
+        lfs_flags |= LFS_O_APPEND;
+
+    return lfs_flags;
+}
+
 int mock_linux_open(char *path, int flags, int mode)
 {
     Proc *proc = proc_current();
@@ -281,7 +304,7 @@ int mock_linux_open(char *path, int flags, int mode)
 
     ensure_os(proc, OS_LINUX, __func__);
 
-    int converted_flags = 0; // TODO: convert flags
+    int converted_flags = convert_linux_open_flags_to_lfs(flags);
 
     int ret = proc_open_file(proc, path, converted_flags);
     if (ret < 0) {
