@@ -51,6 +51,8 @@ static int parse_ipv4(char *src, int len, int *pcur, AddrIPv4 *ipv4)
 	}
 
 	ipv4->data = out;
+
+	*pcur = cur;
 	return 0;
 }
 
