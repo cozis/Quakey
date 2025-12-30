@@ -1882,6 +1882,6 @@ int proc_getdescflags(Proc *proc, int desc_idx)
     if (desc->non_blocking)
         flags |= PROC_FLAG_NONBLOCK;
 
-    proc->current_time = pick_getdescflags_duration(proc);
+    proc->current_time += pick_getdescflags_duration(proc);
     return flags;
 }
