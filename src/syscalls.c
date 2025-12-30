@@ -1,5 +1,6 @@
 #include "syscalls.h"
 #include "sim.h"
+#include "3p/rpmalloc.h"
 
 #include <stdio.h>
 #include <stdarg.h>
@@ -815,17 +816,117 @@ int mock_linux_fcntl(int fd, int cmd, ...)
 
 DIR *mock_linux_opendir(char *name)
 {
-    abortf("mock %s() not implemented yet\n", __func__); // TODO
+    Proc *proc = proc_current();
+    if (proc == NULL)
+        abortf("Call to %s() with no node scheduled\n", __func__);
+
+    ensure_os(proc, OS_LINUX, __func__);
+
+    int ret = proc_open_dir(proc, name);
+    if (ret < 0) {
+        switch (ret) {
+        case PROC_ERROR_FULL:
+            *proc_errno_ptr(proc) = EMFILE;
+            return NULL;
+        case PROC_ERROR_NOENT:
+            *proc_errno_ptr(proc) = ENOENT;
+            return NULL;
+        case PROC_ERROR_IO:
+        default:
+            *proc_errno_ptr(proc) = EIO;
+            return NULL;
+        }
+    }
+
+    // Allocate DIR structure
+    DIR *dirp = rpmalloc(sizeof(DIR));
+    if (dirp == NULL) {
+        // Close the descriptor since we can't return it
+        proc_close(proc, ret, false);
+        *proc_errno_ptr(proc) = EMFILE;
+        return NULL;
+    }
+
+    dirp->fd = ret;
+    return dirp;
 }
 
 struct dirent* mock_linux_readdir(DIR *dirp)
 {
-    abortf("mock %s() not implemented yet\n", __func__); // TODO
+    Proc *proc = proc_current();
+    if (proc == NULL)
+        abortf("Call to %s() with no node scheduled\n", __func__);
+
+    ensure_os(proc, OS_LINUX, __func__);
+
+    if (dirp == NULL) {
+        *proc_errno_ptr(proc) = EBADF;
+        return NULL;
+    }
+
+    DirEntry entry;
+    int ret = proc_read_dir(proc, dirp->fd, &entry);
+    if (ret < 0) {
+        switch (ret) {
+        case PROC_ERROR_BADIDX:
+            *proc_errno_ptr(proc) = EBADF;
+            return NULL;
+        case PROC_ERROR_BADARG:
+            *proc_errno_ptr(proc) = EBADF;
+            return NULL;
+        case PROC_ERROR_IO:
+        default:
+            *proc_errno_ptr(proc) = EIO;
+            return NULL;
+        }
+    }
+
+    if (ret == 0) {
+        // End of directory - return NULL without setting errno
+        return NULL;
+    }
+
+    // Copy to the DIR's entry buffer
+    int i = 0;
+    while (entry.name[i] != '\0' && i < 255) {
+        dirp->entry.d_name[i] = entry.name[i];
+        i++;
+    }
+    dirp->entry.d_name[i] = '\0';
+    dirp->entry.d_type = entry.is_dir ? DT_DIR : DT_REG;
+
+    return &dirp->entry;
 }
 
 int mock_linux_closedir(DIR *dirp)
 {
-    abortf("mock %s() not implemented yet\n", __func__); // TODO
+    Proc *proc = proc_current();
+    if (proc == NULL)
+        abortf("Call to %s() with no node scheduled\n", __func__);
+
+    ensure_os(proc, OS_LINUX, __func__);
+
+    if (dirp == NULL) {
+        *proc_errno_ptr(proc) = EBADF;
+        return -1;
+    }
+
+    int ret = proc_close(proc, dirp->fd, false);
+    if (ret < 0) {
+        switch (ret) {
+        case PROC_ERROR_BADIDX:
+            *proc_errno_ptr(proc) = EBADF;
+            rpfree(dirp);
+            return -1;
+        default:
+            *proc_errno_ptr(proc) = EIO;
+            rpfree(dirp);
+            return -1;
+        }
+    }
+
+    rpfree(dirp);
+    return 0;
 }
 
 int mock_windows_GetLastError(void)

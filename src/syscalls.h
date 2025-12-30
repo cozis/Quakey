@@ -340,11 +340,20 @@ char *mock_windows__fullpath(char *path, char *dst, int cap);
 
 ////////////////////////////////////////////////////////
 
-typedef struct {} DIR;
+// File type values for d_type field
+#define DT_UNKNOWN  0
+#define DT_REG      8   // Regular file
+#define DT_DIR      4   // Directory
 
 struct dirent {
-    // TODO
+    unsigned char d_type;       // File type
+    char          d_name[256];  // Filename
 };
+
+typedef struct {
+    int           fd;           // Descriptor index
+    struct dirent entry;        // Current entry (returned by readdir)
+} DIR;
 
 DIR *mock_linux_opendir(char *name);
 

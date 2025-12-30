@@ -425,7 +425,21 @@ int proc_open_file(Proc *proc, char *file, int flags);
 // Returns a descriptor index on success, or a negative error code:
 //   - PROC_ERROR_FULL descriptor limit reached
 //   - PROC_ERROR_IO filesystem error
-int proc_open_dir(Proc *proc, char *file);
+//   - PROC_ERROR_NOENT directory does not exist
+int proc_open_dir(Proc *proc, char *path);
+
+typedef struct {
+    char name[256];
+    bool is_dir;
+} DirEntry;
+
+// Reads the next entry from an open directory.
+// Advances the process's current_time.
+// Returns 1 if an entry was read, 0 if end of directory, or a negative error code:
+//   - PROC_ERROR_BADIDX invalid descriptor index
+//   - PROC_ERROR_BADARG descriptor is not a directory
+//   - PROC_ERROR_IO filesystem error
+int proc_read_dir(Proc *proc, int desc_idx, DirEntry *entry);
 
 // Reads up to len bytes from a descriptor into dst.
 // Works for both files and connection sockets.

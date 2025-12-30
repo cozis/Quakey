@@ -1517,7 +1517,12 @@ int proc_open_dir(Proc *proc, char *path)
 
     int ret = lfs_dir_open(&proc->lfs, &desc->dir, path);
     if (ret < 0) {
-        assert(0); // TODO
+        switch (ret) {
+        case LFS_ERR_NOENT:
+            return PROC_ERROR_NOENT;
+        default:
+            return PROC_ERROR_IO;
+        }
     }
 
     desc->type = DESC_DIRECTORY;
@@ -1526,6 +1531,46 @@ int proc_open_dir(Proc *proc, char *path)
 
     proc->current_time += pick_open_dir_duration(proc);
     return desc_idx;
+}
+
+static Nanos pick_readdir_duration(Proc *proc)
+{
+    (void) proc;
+    return 200;
+}
+
+int proc_read_dir(Proc *proc, int desc_idx, DirEntry *entry)
+{
+    if (!is_desc_idx_valid(proc, desc_idx))
+        return PROC_ERROR_BADIDX;
+    Desc *desc = &proc->desc[desc_idx];
+
+    if (desc->type != DESC_DIRECTORY)
+        return PROC_ERROR_BADARG;
+
+    struct lfs_info info;
+    int ret = lfs_dir_read(&proc->lfs, &desc->dir, &info);
+    if (ret < 0)
+        return PROC_ERROR_IO;
+
+    if (ret == 0) {
+        // End of directory
+        proc->current_time += pick_readdir_duration(proc);
+        return 0;
+    }
+
+    // Copy entry information
+    // LFS_NAME_MAX is typically 255, and our name buffer is 256
+    int i = 0;
+    while (info.name[i] != '\0' && i < 255) {
+        entry->name[i] = info.name[i];
+        i++;
+    }
+    entry->name[i] = '\0';
+    entry->is_dir = (info.type == LFS_TYPE_DIR);
+
+    proc->current_time += pick_readdir_duration(proc);
+    return 1;
 }
 
 static int recv_inner(Desc *desc, char *dst, int len)
