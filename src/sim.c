@@ -197,6 +197,11 @@ int quakey_init(Quakey **psim)
     sim->max_procs = 0;
     sim->procs = NULL;
 
+    if (event_bus_init(&sim->event_bus) < 0) {
+        rpfree(sim);
+        return -1;
+    }
+
     *psim = sim;
     return 0;
 }
@@ -206,6 +211,7 @@ void quakey_free(Quakey *sim)
     for (int i = 0; i < sim->num_procs; i++)
         proc_free(sim->procs[i]);
 
+    event_bus_free(&sim->event_bus);
     rpfree(sim->procs);
     rpfree(sim);
 }
@@ -292,6 +298,7 @@ bool quakey_schedule_one(Quakey *sim)
 
     // If we reached this point, no processes were
     // ready, so advance the time until a timeout occurs
+    // or an event becomes available
 
     // Find the process with the most imminent wakeup time
     Proc *chosen_proc = NULL;
@@ -299,15 +306,30 @@ bool quakey_schedule_one(Quakey *sim)
     for (int i = 0; i < sim->num_procs; i++) {
 
         Proc *proc = sim->procs[i];
-        if (proc->poll_timeout < 0)
-            continue; // No wakeup time set for this process
 
-        Nanos wakeup_time = proc->poll_call_time + proc->poll_timeout * 1000000;
-        assert(wakeup_time > proc->current_time);
+        // Check poll timeout
+        if (proc->poll_timeout >= 0) {
+            Nanos wakeup_time = proc->poll_call_time + proc->poll_timeout * 1000000;
+            if (wakeup_time > proc->current_time) {
+                if (chosen_proc == NULL || wakeup_time < chosen_wakeup) {
+                    chosen_proc = proc;
+                    chosen_wakeup = wakeup_time;
+                }
+            }
+        }
 
-        if (chosen_proc == NULL || wakeup_time < chosen_wakeup) {
-            chosen_proc = proc;
-            chosen_wakeup = wakeup_time;
+        // Check event bus for pending events
+        Nanos event_time = event_bus_next_event_time(&sim->event_bus, proc);
+        if (event_time != UINT64_MAX) {
+            // The event becomes available when proc->current_time > event_time,
+            // so we need to advance to event_time + 1
+            Nanos event_wakeup = event_time + 1;
+            if (event_wakeup > proc->current_time) {
+                if (chosen_proc == NULL || event_wakeup < chosen_wakeup) {
+                    chosen_proc = proc;
+                    chosen_wakeup = event_wakeup;
+                }
+            }
         }
     }
     if (chosen_proc == NULL)
@@ -865,6 +887,10 @@ bool proc_ready(Proc *proc)
 {
     // If poll timeout is 0, always ready
     if (proc->poll_timeout == 0)
+        return true;
+
+    // Check if there are any available events in the event bus
+    if (event_bus_has_events(&proc->sim->event_bus, proc))
         return true;
 
     // Check if any polled descriptors have pending events
@@ -1929,4 +1955,291 @@ int proc_getdescflags(Proc *proc, int desc_idx)
 
     proc->current_time += pick_getdescflags_duration(proc);
     return flags;
+}
+
+////////////////////////////////////////////////////////
+// EVENT BUS
+
+int event_bus_init(EventBus *bus)
+{
+    bus->events = rpmalloc(EVENT_QUEUE_INITIAL_CAPACITY * sizeof(Event));
+    if (bus->events == NULL)
+        return -1;
+    bus->num_events = 0;
+    bus->max_events = EVENT_QUEUE_INITIAL_CAPACITY;
+    return 0;
+}
+
+void event_bus_free(EventBus *bus)
+{
+    rpfree(bus->events);
+    bus->events = NULL;
+    bus->num_events = 0;
+    bus->max_events = 0;
+}
+
+// Binary search to find insertion point for an event with given time_tag
+static int event_bus_find_insert_pos(EventBus *bus, Nanos time_tag)
+{
+    int lo = 0;
+    int hi = bus->num_events;
+
+    while (lo < hi) {
+        int mid = lo + (hi - lo) / 2;
+        if (bus->events[mid].time_tag <= time_tag)
+            lo = mid + 1;
+        else
+            hi = mid;
+    }
+    return lo;
+}
+
+int event_bus_publish(EventBus *bus, Event *event)
+{
+    // Grow array if needed
+    if (bus->num_events == bus->max_events) {
+        int new_max = bus->max_events * 2;
+        Event *new_events = rprealloc(bus->events, new_max * sizeof(Event));
+        if (new_events == NULL)
+            return -1;
+        bus->events = new_events;
+        bus->max_events = new_max;
+    }
+
+    // Find insertion position to maintain sorted order by time_tag
+    int pos = event_bus_find_insert_pos(bus, event->time_tag);
+
+    // Shift events to make room
+    for (int i = bus->num_events; i > pos; i--)
+        bus->events[i] = bus->events[i - 1];
+
+    // Insert the new event
+    bus->events[pos] = *event;
+    bus->num_events++;
+
+    return 0;
+}
+
+// Check if an event is destined for the given process
+static bool event_is_for_proc(Event *event, Proc *proc)
+{
+    if (event->dst_proc_idx == -1)
+        return true;  // Broadcast event
+
+    // Find the process index
+    Quakey *sim = proc->sim;
+    for (int i = 0; i < sim->num_procs; i++) {
+        if (sim->procs[i] == proc)
+            return event->dst_proc_idx == i;
+    }
+    return false;
+}
+
+// Find the index of the first event available for the process
+// (destined for proc and time_tag < proc->current_time)
+// Returns -1 if no such event exists
+static int event_bus_find_first_for_proc(EventBus *bus, Proc *proc)
+{
+    for (int i = 0; i < bus->num_events; i++) {
+        Event *event = &bus->events[i];
+
+        // Since events are sorted by time_tag, if we find one
+        // with time_tag >= current_time, all subsequent ones
+        // will also be unavailable
+        if (event->time_tag >= proc->current_time)
+            return -1;
+
+        if (event_is_for_proc(event, proc))
+            return i;
+    }
+    return -1;
+}
+
+int event_bus_peek(EventBus *bus, Proc *proc, Event **events, int *count)
+{
+    *events = NULL;
+    *count = 0;
+
+    int first = event_bus_find_first_for_proc(bus, proc);
+    if (first < 0)
+        return 0;
+
+    *events = &bus->events[first];
+
+    // Count how many consecutive events are available for this process
+    int c = 0;
+    for (int i = first; i < bus->num_events; i++) {
+        Event *event = &bus->events[i];
+        if (event->time_tag >= proc->current_time)
+            break;
+        if (event_is_for_proc(event, proc))
+            c++;
+    }
+    *count = c;
+    return 0;
+}
+
+int event_bus_consume(EventBus *bus, Proc *proc, Event *event)
+{
+    int idx = event_bus_find_first_for_proc(bus, proc);
+    if (idx < 0)
+        return -1;
+
+    // Copy the event
+    *event = bus->events[idx];
+
+    // Remove the event by shifting remaining events
+    for (int i = idx; i < bus->num_events - 1; i++)
+        bus->events[i] = bus->events[i + 1];
+    bus->num_events--;
+
+    return 0;
+}
+
+bool event_bus_has_events(EventBus *bus, Proc *proc)
+{
+    return event_bus_find_first_for_proc(bus, proc) >= 0;
+}
+
+Nanos event_bus_next_event_time(EventBus *bus, Proc *proc)
+{
+    if (proc == NULL) {
+        // Return the time of the earliest event overall
+        if (bus->num_events == 0)
+            return UINT64_MAX;
+        return bus->events[0].time_tag;
+    }
+
+    // Find the earliest event destined for this process
+    for (int i = 0; i < bus->num_events; i++) {
+        if (event_is_for_proc(&bus->events[i], proc))
+            return bus->events[i].time_tag;
+    }
+    return UINT64_MAX;
+}
+
+////////////////////////////////////////////////////////
+// PROC EVENT HELPERS
+
+// Find the index of a process in the simulation
+static int find_proc_idx(Quakey *sim, Proc *proc)
+{
+    if (proc == NULL)
+        return -1;
+    for (int i = 0; i < sim->num_procs; i++) {
+        if (sim->procs[i] == proc)
+            return i;
+    }
+    return -1;
+}
+
+int proc_publish_event(Proc *proc, Proc *dst_proc, int type,
+    void *data, int data_size)
+{
+    return proc_publish_event_at(proc, dst_proc, type, data, data_size,
+        proc->current_time);
+}
+
+int proc_publish_event_at(Proc *proc, Proc *dst_proc, int type,
+    void *data, int data_size, Nanos time_tag)
+{
+    if (data_size > EVENT_DATA_MAX)
+        return -1;
+
+    Quakey *sim = proc->sim;
+
+    Event event;
+    event.time_tag = time_tag;
+    event.src_proc_idx = find_proc_idx(sim, proc);
+    event.dst_proc_idx = find_proc_idx(sim, dst_proc);
+    event.type = type;
+    event.data_size = data_size;
+
+    if (data_size > 0 && data != NULL)
+        memcpy(event.data, data, data_size);
+
+    return event_bus_publish(&sim->event_bus, &event);
+}
+
+int proc_consume_event(Proc *proc, Event *event)
+{
+    return event_bus_consume(&proc->sim->event_bus, proc, event);
+}
+
+bool proc_has_events(Proc *proc)
+{
+    return event_bus_has_events(&proc->sim->event_bus, proc);
+}
+
+Nanos proc_next_event_time(Proc *proc)
+{
+    return event_bus_next_event_time(&proc->sim->event_bus, proc);
+}
+
+////////////////////////////////////////////////////////
+// PUBLIC EVENT API
+
+int quakey_publish_event(int dst_proc_idx, int type,
+    void *data, int data_size)
+{
+    Proc *proc = proc_current();
+    if (proc == NULL)
+        return -1;
+
+    Proc *dst_proc = NULL;
+    if (dst_proc_idx >= 0 && dst_proc_idx < proc->sim->num_procs)
+        dst_proc = proc->sim->procs[dst_proc_idx];
+
+    return proc_publish_event(proc, dst_proc, type, data, data_size);
+}
+
+int quakey_publish_event_at(int dst_proc_idx, int type,
+    void *data, int data_size, QuakeyNanos time_tag)
+{
+    Proc *proc = proc_current();
+    if (proc == NULL)
+        return -1;
+
+    Proc *dst_proc = NULL;
+    if (dst_proc_idx >= 0 && dst_proc_idx < proc->sim->num_procs)
+        dst_proc = proc->sim->procs[dst_proc_idx];
+
+    return proc_publish_event_at(proc, dst_proc, type, data, data_size, time_tag);
+}
+
+int quakey_consume_event(QuakeyEvent *event)
+{
+    Proc *proc = proc_current();
+    if (proc == NULL)
+        return -1;
+
+    // QuakeyEvent and Event have the same layout
+    return proc_consume_event(proc, (Event*) event);
+}
+
+bool quakey_has_events(void)
+{
+    Proc *proc = proc_current();
+    if (proc == NULL)
+        return false;
+
+    return proc_has_events(proc);
+}
+
+QuakeyNanos quakey_next_event_time(void)
+{
+    Proc *proc = proc_current();
+    if (proc == NULL)
+        return UINT64_MAX;
+
+    return proc_next_event_time(proc);
+}
+
+QuakeyNanos quakey_current_time(void)
+{
+    Proc *proc = proc_current();
+    if (proc == NULL)
+        return 0;
+
+    return proc->current_time;
 }

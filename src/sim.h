@@ -522,6 +522,109 @@ int proc_setdescflags(Proc *proc, int fd, int flags);
 int proc_getdescflags(Proc *proc, int fd);
 
 ////////////////////////////////////////////////////////
+// EVENT BUS
+
+// Maximum size of event data payload
+#define EVENT_DATA_MAX 256
+
+// Default initial capacity of the event queue
+#define EVENT_QUEUE_INITIAL_CAPACITY 64
+
+typedef struct Event Event;
+typedef struct EventBus EventBus;
+
+// An event in the event bus. Events are tagged with a time
+// and a destination process. Events can only be consumed by
+// their destination process when the process's current_time
+// exceeds the event's time_tag.
+struct Event {
+    // Time tag of the event. A process can only consume this
+    // event when its current_time > time_tag.
+    Nanos time_tag;
+
+    // Index of the source process in sim->procs (-1 for external events)
+    int src_proc_idx;
+
+    // Index of the destination process in sim->procs (-1 for broadcast)
+    int dst_proc_idx;
+
+    // Event type identifier (application-defined)
+    int type;
+
+    // Event data payload
+    int  data_size;
+    char data[EVENT_DATA_MAX];
+};
+
+// The event bus holds all pending events in the simulation.
+// Events are sorted by time_tag to enable efficient retrieval.
+struct EventBus {
+    // Dynamic array of events, sorted by time_tag (ascending)
+    Event *events;
+    int    num_events;
+    int    max_events;
+};
+
+// Initialize the event bus
+int event_bus_init(EventBus *bus);
+
+// Free the event bus resources
+void event_bus_free(EventBus *bus);
+
+// Publish an event to the bus. The event will be inserted in
+// sorted order by time_tag.
+// Returns 0 on success, -1 on failure (memory allocation).
+int event_bus_publish(EventBus *bus, Event *event);
+
+// Peek at events for a given process. Returns a pointer to events
+// that are destined for this process AND have time_tag < proc->current_time.
+// The count of such events is stored in *count.
+// Note: This does not remove the events from the bus.
+int event_bus_peek(EventBus *bus, Proc *proc, Event **events, int *count);
+
+// Consume (remove) the oldest event destined for this process
+// that has time_tag < proc->current_time.
+// Returns 0 on success (event copied to *event), -1 if no event available.
+int event_bus_consume(EventBus *bus, Proc *proc, Event *event);
+
+// Check if there are any events available for this process
+// (time_tag < proc->current_time).
+bool event_bus_has_events(EventBus *bus, Proc *proc);
+
+// Get the time of the next event for a process (or any process if proc is NULL).
+// Returns the time_tag of the next available event, or UINT64_MAX if none.
+Nanos event_bus_next_event_time(EventBus *bus, Proc *proc);
+
+////////////////////////////////////////////////////////
+// PROC EVENT HELPERS
+
+// Publish an event from the current process to a specific destination process.
+// The event's time_tag is set to the current process's time.
+// dst_proc can be NULL for broadcast events.
+// Returns 0 on success, -1 on failure.
+int proc_publish_event(Proc *proc, Proc *dst_proc, int type,
+    void *data, int data_size);
+
+// Publish an event with a specific time tag from the current process.
+// This allows scheduling events in the future.
+// dst_proc can be NULL for broadcast events.
+// Returns 0 on success, -1 on failure.
+int proc_publish_event_at(Proc *proc, Proc *dst_proc, int type,
+    void *data, int data_size, Nanos time_tag);
+
+// Consume the next available event for this process.
+// Only events with time_tag < proc->current_time are available.
+// Returns 0 on success (event copied to *event), -1 if no event available.
+int proc_consume_event(Proc *proc, Event *event);
+
+// Check if there are any events available for this process.
+bool proc_has_events(Proc *proc);
+
+// Get the time of the next event for this process.
+// Returns UINT64_MAX if no events are pending.
+Nanos proc_next_event_time(Proc *proc);
+
+////////////////////////////////////////////////////////
 // SIM
 
 #define PID_MIN 300
@@ -550,6 +653,12 @@ struct Quakey {
     int num_procs;
     int max_procs;
     Proc **procs;
+
+    // Event bus for inter-process communication with
+    // time-tagged events. Events can only be consumed
+    // by a process when its current_time exceeds the
+    // event's time_tag.
+    EventBus event_bus;
 };
 
 // Returns the index of the host associated to the
