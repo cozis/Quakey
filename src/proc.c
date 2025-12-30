@@ -1347,3 +1347,173 @@ int proc_send(Proc *proc, int desc_idx, char *src, int len)
     proc->current_time += pick_send_duration(proc);
     return num;
 }
+
+static Nanos pick_mkdir_duration(Proc *proc)
+{
+    (void) proc;
+    return 100000;
+}
+
+int proc_mkdir(Proc *proc, char *path)
+{
+    int ret = lfs_mkdir(&proc->lfs, path);
+    if (ret < 0) {
+        switch (ret) {
+        case LFS_ERR_EXIST:
+            return PROC_ERROR_EXISTS;
+        case LFS_ERR_NOENT:
+            return PROC_ERROR_NOENT;
+        default:
+            return PROC_ERROR_IO;
+        }
+    }
+    proc->current_time += pick_mkdir_duration(proc);
+    return 0;
+}
+
+static Nanos pick_remove_duration(Proc *proc)
+{
+    (void) proc;
+    return 300000;
+}
+
+int proc_remove(Proc *proc, char *path)
+{
+    int ret = lfs_remove(&proc->lfs, path);
+    if (ret < 0) {
+        switch (ret) {
+        case LFS_ERR_NOENT:
+            return PROC_ERROR_NOENT;
+        case LFS_ERR_NOTEMPTY:
+            return PROC_ERROR_NOTEMPTY;
+        default:
+            return PROC_ERROR_IO;
+        }
+    }
+    proc->current_time += pick_remove_duration(proc);
+    return 0;
+}
+
+static Nanos pick_rename_duration(Proc *proc)
+{
+    (void) proc;
+    return 300000;
+}
+
+int proc_rename(Proc *proc, char *oldpath, char *newpath)
+{
+    int ret = lfs_rename(&proc->lfs, oldpath, newpath);
+    if (ret < 0) {
+        switch (ret) {
+        case LFS_ERR_NOENT:
+            return PROC_ERROR_NOENT;
+        case LFS_ERR_EXIST:
+            return PROC_ERROR_EXIST;
+        case LFS_ERR_NOTEMPTY:
+            return PROC_ERROR_NOTEMPTY;
+        case LFS_ERR_ISDIR:
+            return PROC_ERROR_ISDIR;
+        default:
+            return PROC_ERROR_IO;
+        }
+    }
+    proc->current_time += pick_rename_duration(proc);
+    return 0;
+}
+
+static Nanos pick_fileinfo_duration(Proc *proc)
+{
+    (void) proc;
+    return 1000;
+}
+
+int proc_fileinfo(Proc *proc, int desc_idx, FileInfo *info)
+{
+    if (!is_desc_idx_valid(proc, desc_idx))
+        return PROC_ERROR_BADIDX;
+    Desc *desc = &proc->desc[desc_idx];
+
+    switch (desc->type) {
+    case DESC_FILE:
+        {
+            lfs_soff_t size = lfs_file_size(&proc->lfs, &desc->file);
+            if (size < 0)
+                return PROC_ERROR_IO;
+            info->size   = size;
+            info->is_dir = false;
+        }
+        break;
+    case DESC_DIRECTORY:
+        {
+            info->size   = 0;
+            info->is_dir = true;
+        }
+        break;
+    default:
+        return PROC_ERROR_BADIDX;
+    }
+
+    proc->current_time += pick_fileinfo_duration(proc);
+    return 0;
+}
+
+static Nanos pick_lseek_duration(Proc *proc)
+{
+    (void) proc;
+    return 100;
+}
+
+int proc_lseek(Proc *proc, int desc_idx, int64_t offset, int whence)
+{
+    if (!is_desc_idx_valid(proc, desc_idx))
+        return PROC_ERROR_BADIDX;
+    Desc *desc = &proc->desc[desc_idx];
+
+    if (desc->type != DESC_FILE)
+        return PROC_ERROR_BADIDX;
+
+    int lfs_whence;
+    switch (whence) {
+    case PROC_SEEK_SET:
+        lfs_whence = LFS_SEEK_SET;
+        break;
+    case PROC_SEEK_CUR:
+        lfs_whence = LFS_SEEK_CUR;
+        break;
+    case PROC_SEEK_END:
+        lfs_whence = LFS_SEEK_END;
+        break;
+    default:
+        return PROC_ERROR_BADARG;
+    }
+
+    lfs_soff_t ret = lfs_file_seek(&proc->lfs, &desc->file, (lfs_soff_t) offset, lfs_whence);
+    if (ret < 0)
+        return PROC_ERROR_BADARG;
+
+    proc->current_time += pick_lseek_duration(proc);
+    return ret;
+}
+
+static Nanos pick_fsync_duration(Proc *proc)
+{
+    (void) proc;
+    return 500000;
+}
+
+int proc_fsync(Proc *proc, int desc_idx)
+{
+    if (!is_desc_idx_valid(proc, desc_idx))
+        return PROC_ERROR_BADIDX;
+    Desc *desc = &proc->desc[desc_idx];
+
+    if (desc->type != DESC_FILE)
+        return PROC_ERROR_BADIDX;
+
+    int ret = lfs_file_sync(&proc->lfs, &desc->file);
+    if (ret < 0)
+        return PROC_ERROR_IO;
+
+    proc->current_time += pick_fsync_duration(proc);
+    return 0;
+}

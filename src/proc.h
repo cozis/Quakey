@@ -49,6 +49,17 @@ enum {
     PROC_ERROR_ISDIR    = -14,
     PROC_ERROR_WOULDBLOCK = -15,
     PROC_ERROR_NOMEM    = -16,
+    PROC_ERROR_NOENT    = -17,
+    PROC_ERROR_NOTEMPTY = -18,
+    PROC_ERROR_EXIST    = -19,
+    PROC_ERROR_EXISTS   = -19,  // Alias for PROC_ERROR_EXIST
+};
+
+// lseek whence values for proc_lseek
+enum {
+    PROC_SEEK_SET = 0,
+    PROC_SEEK_CUR = 1,
+    PROC_SEEK_END = 2,
 };
 
 // Number of nanoseconds
@@ -458,5 +469,28 @@ int proc_recv(Proc *proc, int desc_idx, char *dst, int len);
 //   - PROC_ERROR_HANGUP connection closed by peer
 //   - PROC_ERROR_NOTCONN socket not connected
 int proc_send(Proc *proc, int desc_idx, char *src, int len);
+
+// TODO: comment
+int proc_mkdir(Proc *proc, char *path);
+
+// TODO: comment
+int proc_remove(Proc *proc, char *path);
+
+// TODO: comment
+int proc_rename(Proc *proc, char *oldpath, char *newpath);
+
+typedef struct {
+    int64_t size;
+    bool    is_dir;
+} FileInfo;
+
+// TODO: comment
+int proc_fileinfo(Proc *proc, int desc_idx, FileInfo *info);
+
+// TODO: comment
+int proc_lseek(Proc *proc, int desc_idx, int64_t offset, int whence);
+
+// TODO: comment
+int proc_fsync(Proc *proc, int desc_idx);
 
 #endif // PROC_INCLUDED

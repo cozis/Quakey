@@ -78,12 +78,12 @@ int mock_linux_socket(int domain, int type, int protocol)
     if (ret < 0) {
         switch (ret) {
         case PROC_ERROR_FULL:
-            proc->errno_ = EMFILE;
+            *proc_errno_ptr(proc) = EMFILE;
             return -1;
         default:
             break;
         }
-        proc->errno_ = EIO;
+        *proc_errno_ptr(proc) = EIO;
         return -1;
     }
     int desc_idx = ret;
@@ -104,12 +104,12 @@ int mock_linux_close(int fd)
     if (ret < 0) {
         switch (ret) {
         case PROC_ERROR_BADIDX:
-            proc->errno_ = EBADF;
+            *proc_errno_ptr(proc) = EBADF;
             return -1;
         default:
             break;
         }
-        proc->errno_ = EIO;
+        *proc_errno_ptr(proc) = EIO;
         return -1;
     }
 
@@ -159,7 +159,7 @@ int mock_linux_bind(int fd, void *addr, size_t addr_len)
     uint16_t converted_port;
     int ret = convert_addr(addr, addr_len, &converted_addr, &converted_port);
     if (ret < 0) {
-        proc->errno_ = EINVAL;
+        *proc_errno_ptr(proc) = EINVAL;
         return ret;
     }
 
@@ -168,27 +168,27 @@ int mock_linux_bind(int fd, void *addr, size_t addr_len)
     if (ret < 0) {
         switch (ret) {
         case PROC_ERROR_BADIDX:
-            proc->errno_ = EBADF;
+            *proc_errno_ptr(proc) = EBADF;
             return -1;
         case PROC_ERROR_NOTSOCK:
-            proc->errno_ = ENOTSOCK;
+            *proc_errno_ptr(proc) = ENOTSOCK;
             return -1;
         case PROC_ERROR_CANTBIND:
-            proc->errno_ = EINVAL;
+            *proc_errno_ptr(proc) = EINVAL;
             return -1;
         case PROC_ERROR_BADFAM:
-            proc->errno_ = EAFNOSUPPORT;
+            *proc_errno_ptr(proc) = EAFNOSUPPORT;
             return -1;
         case PROC_ERROR_NOTAVAIL:
-            proc->errno_ = EADDRNOTAVAIL;
+            *proc_errno_ptr(proc) = EADDRNOTAVAIL;
             return -1;
         case PROC_ERROR_ADDRUSED:
-            proc->errno_ = EADDRINUSE;
+            *proc_errno_ptr(proc) = EADDRINUSE;
             return -1;
         default:
             break;
         }
-        proc->errno_ = EIO;
+        *proc_errno_ptr(proc) = EIO;
         return -1;
     }
 
@@ -208,19 +208,19 @@ int mock_linux_listen(int fd, int backlog)
     if (ret < 0) {
         switch (ret) {
         case PROC_ERROR_BADIDX:
-            proc->errno_ = EBADF;
+            *proc_errno_ptr(proc) = EBADF;
             return -1;
         case PROC_ERROR_BADARG:
-            proc->errno_ = EINVAL;
+            *proc_errno_ptr(proc) = EINVAL;
             return -1;
         case PROC_ERROR_NOTSOCK:
-            proc->errno_ = ENOTSOCK;
+            *proc_errno_ptr(proc) = ENOTSOCK;
             return -1;
         case PROC_ERROR_ADDRUSED:
-            proc->errno_ = EADDRINUSE;
+            *proc_errno_ptr(proc) = EADDRINUSE;
             return -1;
         }
-        proc->errno_ = EIO;
+        *proc_errno_ptr(proc) = EIO;
         return -1;
     }
 
@@ -239,7 +239,7 @@ int mock_linux_connect(int fd, void *addr, size_t addr_len)
     uint16_t converted_port;
     int ret = convert_addr(addr, addr_len, &converted_addr, &converted_port);
     if (ret < 0) {
-        proc->errno_ = EINVAL;
+        *proc_errno_ptr(proc) = EINVAL;
         return -1;
     }
 
@@ -251,25 +251,25 @@ int mock_linux_connect(int fd, void *addr, size_t addr_len)
     if (ret < 0) {
         switch (ret) {
         case PROC_ERROR_BADIDX:
-            proc->errno_ = EBADF;
+            *proc_errno_ptr(proc) = EBADF;
             return -1;
         case PROC_ERROR_NOTSOCK:
-            proc->errno_ = ENOTSOCK;
+            *proc_errno_ptr(proc) = ENOTSOCK;
             return -1;
         case PROC_ERROR_BADARG:
-            proc->errno_ = EISCONN;
+            *proc_errno_ptr(proc) = EISCONN;
             return -1;
         case PROC_ERROR_ADDRUSED:
-            proc->errno_ = EADDRINUSE;
+            *proc_errno_ptr(proc) = EADDRINUSE;
             return -1;
         default:
             break;
         }
-        proc->errno_ = EINPROGRESS;
+        *proc_errno_ptr(proc) = EINPROGRESS;
         return -1;
     }
 
-    proc->errno_ = EINPROGRESS;
+    *proc_errno_ptr(proc) = EINPROGRESS;
     return -1;
 }
 
@@ -310,15 +310,15 @@ int mock_linux_open(char *path, int flags, int mode)
     if (ret < 0) {
         switch (ret) {
         case PROC_ERROR_FULL:
-            proc->errno_ = EMFILE;
+            *proc_errno_ptr(proc) = EMFILE;
             return -1;
         case PROC_ERROR_IO:
-            proc->errno_ = EIO;
+            *proc_errno_ptr(proc) = EIO;
             return -1;
         default:
             break;
         }
-        proc->errno_ = ENOENT;
+        *proc_errno_ptr(proc) = ENOENT;
         return -1;
     }
     int desc_idx = ret;
@@ -338,19 +338,19 @@ int mock_linux_read(int fd, char *dst, int len)
     if (ret < 0) {
         switch (ret) {
         case PROC_ERROR_BADIDX:
-            proc->errno_ = EBADF;
+            *proc_errno_ptr(proc) = EBADF;
             return -1;
         case PROC_ERROR_BADARG:
-            proc->errno_ = EINVAL;
+            *proc_errno_ptr(proc) = EINVAL;
             return -1;
         case PROC_ERROR_ISDIR:
-            proc->errno_ = EISDIR;
+            *proc_errno_ptr(proc) = EISDIR;
             return -1;
         case PROC_ERROR_IO:
-            proc->errno_ = EIO;
+            *proc_errno_ptr(proc) = EIO;
             return -1;
         }
-        proc->errno_ = EIO;
+        *proc_errno_ptr(proc) = EIO;
         return -1;
     }
 
@@ -369,15 +369,15 @@ int mock_linux_write(int fd, char *src, int len)
     if (ret < 0) {
         switch (ret) {
         case PROC_ERROR_BADIDX:
-            proc->errno_ = EBADF;
+            *proc_errno_ptr(proc) = EBADF;
             return -1;
         case PROC_ERROR_IO:
-            proc->errno_ = EIO;
+            *proc_errno_ptr(proc) = EIO;
             return -1;
         default:
             break;
         }
-        proc->errno_ = EIO;
+        *proc_errno_ptr(proc) = EIO;
         return -1;
     }
 
@@ -399,27 +399,27 @@ int mock_linux_recv(int fd, char *dst, int len, int flags)
     if (ret < 0) {
         switch (ret) {
         case PROC_ERROR_BADIDX:
-            proc->errno_ = EBADF;
+            *proc_errno_ptr(proc) = EBADF;
             return -1;
         case PROC_ERROR_NOTSOCK:
-            proc->errno_ = ENOTSOCK;
+            *proc_errno_ptr(proc) = ENOTSOCK;
             return -1;
         case PROC_ERROR_NOTCONN:
-            proc->errno_ = ENOTCONN;
+            *proc_errno_ptr(proc) = ENOTCONN;
             return -1;
         case PROC_ERROR_RESET:
-            proc->errno_ = ECONNRESET;
+            *proc_errno_ptr(proc) = ECONNRESET;
             return -1;
         case PROC_ERROR_HANGUP:
-            proc->errno_ = 0;
+            *proc_errno_ptr(proc) = 0;
             return 0;
         case PROC_ERROR_WOULDBLOCK:
-            proc->errno_ = EAGAIN;
+            *proc_errno_ptr(proc) = EAGAIN;
             return -1;
         default:
             break;
         }
-        proc->errno_ = EIO;
+        *proc_errno_ptr(proc) = EIO;
         return -1;
     }
 
@@ -442,21 +442,21 @@ int mock_linux_send(int fd, char *src, int len, int flags)
     if (ret < 0) {
         switch (ret) {
         case PROC_ERROR_BADIDX:
-            proc->errno_ = EBADF;
+            *proc_errno_ptr(proc) = EBADF;
             return -1;
         case PROC_ERROR_RESET:
-            proc->errno_ = ECONNRESET;
+            *proc_errno_ptr(proc) = ECONNRESET;
             return -1;
         case PROC_ERROR_HANGUP:
-            proc->errno_ = EPIPE;
+            *proc_errno_ptr(proc) = EPIPE;
             return -1;
         case PROC_ERROR_WOULDBLOCK:
-            proc->errno_ = EAGAIN;
+            *proc_errno_ptr(proc) = EAGAIN;
             return -1;
         default:
             break;
         }
-        proc->errno_ = EIO;
+        *proc_errno_ptr(proc) = EIO;
         return -1;
     }
 
@@ -477,24 +477,24 @@ int mock_linux_accept(int fd, void *addr, socklen_t *addr_len)
     if (ret < 0) {
         switch (ret) {
         case PROC_ERROR_BADIDX:
-            proc->errno_ = EBADF;
+            *proc_errno_ptr(proc) = EBADF;
             return -1;
         case PROC_ERROR_NOTSOCK:
-            proc->errno_ = ENOTSOCK;
+            *proc_errno_ptr(proc) = ENOTSOCK;
             return -1;
         case PROC_ERROR_BADARG:
-            proc->errno_ = EINVAL;
+            *proc_errno_ptr(proc) = EINVAL;
             return -1;
         case PROC_ERROR_FULL:
-            proc->errno_ = EMFILE;
+            *proc_errno_ptr(proc) = EMFILE;
             return -1;
         case PROC_ERROR_WOULDBLOCK:
-            proc->errno_ = EAGAIN;
+            *proc_errno_ptr(proc) = EAGAIN;
             return -1;
         default:
             break;
         }
-        proc->errno_ = EIO;
+        *proc_errno_ptr(proc) = EIO;
         return -1;
     }
     int new_fd = ret;
@@ -536,19 +536,20 @@ int mock_linux_remove(char *path)
 
     ensure_os(proc, OS_LINUX, __func__);
 
-    int ret = lfs_remove(&proc->lfs, path);
+    int ret = proc_remove(proc, path);
     if (ret < 0) {
         switch (ret) {
-        case LFS_ERR_NOENT:
-            proc->errno_ = ENOENT;
-            return -1;
-        case LFS_ERR_NOTEMPTY:
-            proc->errno_ = ENOTEMPTY;
-            return -1;
+        case PROC_ERROR_NOENT:
+            *proc_errno_ptr(proc) = ENOENT;
+            break;
+        case PROC_ERROR_NOTEMPTY:
+            *proc_errno_ptr(proc) = ENOTEMPTY;
+            break;
         default:
-            proc->errno_ = EIO;
-            return -1;
+            *proc_errno_ptr(proc) = EIO;
+            break;
         }
+        return -1;
     }
 
     return 0;
@@ -562,25 +563,26 @@ int mock_linux_rename(char *oldpath, char *newpath)
 
     ensure_os(proc, OS_LINUX, __func__);
 
-    int ret = lfs_rename(&proc->lfs, oldpath, newpath);
+    int ret = proc_rename(proc, oldpath, newpath);
     if (ret < 0) {
         switch (ret) {
-        case LFS_ERR_NOENT:
-            proc->errno_ = ENOENT;
-            return -1;
-        case LFS_ERR_EXIST:
-            proc->errno_ = EEXIST;
-            return -1;
-        case LFS_ERR_NOTEMPTY:
-            proc->errno_ = ENOTEMPTY;
-            return -1;
-        case LFS_ERR_ISDIR:
-            proc->errno_ = EISDIR;
-            return -1;
+        case PROC_ERROR_NOENT:
+            *proc_errno_ptr(proc) = ENOENT;
+            break;
+        case PROC_ERROR_EXIST:
+            *proc_errno_ptr(proc) = EEXIST;
+            break;
+        case PROC_ERROR_NOTEMPTY:
+            *proc_errno_ptr(proc) = ENOTEMPTY;
+            break;
+        case PROC_ERROR_ISDIR:
+            *proc_errno_ptr(proc) = EISDIR;
+            break;
         default:
-            proc->errno_ = EIO;
-            return -1;
+            *proc_errno_ptr(proc) = EIO;
+            break;
         }
+        return -1;
     }
 
     return 0;
@@ -595,7 +597,7 @@ int mock_linux_clock_gettime(clockid_t clockid, struct timespec *tp)
     ensure_os(proc, OS_LINUX, __func__);
 
     if (tp == NULL) {
-        proc->errno_ = EINVAL;
+        *proc_errno_ptr(proc) = EINVAL;
         return -1;
     }
 
@@ -603,7 +605,7 @@ int mock_linux_clock_gettime(clockid_t clockid, struct timespec *tp)
     // simulated time. In simulation, they're equivalent since
     // we don't model wall-clock vs monotonic differences.
     if (clockid != CLOCK_REALTIME && clockid != CLOCK_MONOTONIC) {
-        proc->errno_ = EINVAL;
+        *proc_errno_ptr(proc) = EINVAL;
         return -1;
     }
 
@@ -625,17 +627,96 @@ int mock_linux_flock(int fd, int op)
 
 int mock_linux_fsync(int fd)
 {
-    abortf("mock %s() not implemented yet\n", __func__); // TODO
+    Proc *proc = proc_current();
+    if (proc == NULL)
+        abortf("Call to %s() with no node scheduled\n", __func__);
+
+    ensure_os(proc, OS_LINUX, __func__);
+
+    int ret = proc_fsync(proc, fd);
+    if (ret < 0) {
+        if (ret == PROC_ERROR_BADIDX)
+            *proc_errno_ptr(proc) = EBADF;
+        else
+            *proc_errno_ptr(proc) = EINVAL;
+        return -1;
+    }
+
+    return 0;
 }
 
 off_t mock_linux_lseek(int fd, off_t offset, int whence)
 {
-    abortf("mock %s() not implemented yet\n", __func__); // TODO
+    Proc *proc = proc_current();
+    if (proc == NULL)
+        abortf("Call to %s() with no node scheduled\n", __func__);
+
+    ensure_os(proc, OS_LINUX, __func__);
+
+    // Convert POSIX whence to PROC whence
+    int proc_whence;
+    switch (whence) {
+    case SEEK_SET:
+        proc_whence = PROC_SEEK_SET;
+        break;
+    case SEEK_CUR:
+        proc_whence = PROC_SEEK_CUR;
+        break;
+    case SEEK_END:
+        proc_whence = PROC_SEEK_END;
+        break;
+    default:
+        *proc_errno_ptr(proc) = EINVAL;
+        return (off_t)-1;
+    }
+
+    int ret = proc_lseek(proc, fd, offset, proc_whence);
+    if (ret < 0) {
+        if (ret == PROC_ERROR_BADIDX)
+            *proc_errno_ptr(proc) = EBADF;
+        else
+            *proc_errno_ptr(proc) = EINVAL;
+        return (off_t)-1;
+    }
+
+    return (off_t)ret;
 }
 
 int mock_linux_fstat(int fd, struct stat *buf)
 {
-    abortf("mock %s() not implemented yet\n", __func__); // TODO
+    Proc *proc = proc_current();
+    if (proc == NULL)
+        abortf("Call to %s() with no node scheduled\n", __func__);
+
+    ensure_os(proc, OS_LINUX, __func__);
+
+    if (buf == NULL) {
+        *proc_errno_ptr(proc) = EINVAL;
+        return -1;
+    }
+
+    FileInfo info;
+    int ret = proc_fileinfo(proc, fd, &info);
+    if (ret < 0) {
+        if (ret == PROC_ERROR_BADIDX) {
+            *proc_errno_ptr(proc) = EBADF;
+        } else {
+            *proc_errno_ptr(proc) = EIO;
+        }
+        return -1;
+    }
+
+    memset(buf, 0, sizeof(*buf));
+
+    if (info.is_dir) {
+        buf->st_mode = S_IFDIR | 0755;  // Directory with rwxr-xr-x permissions
+        buf->st_size = 0;
+    } else {
+        buf->st_mode = S_IFREG | 0644;  // Regular file with rw-r--r-- permissions
+        buf->st_size = (off_t) info.size;
+    }
+
+    return 0;
 }
 
 int mock_linux_mkstemp(char *path)
@@ -645,7 +726,7 @@ int mock_linux_mkstemp(char *path)
 
 char *mock_linux_realpath(char *path, char *dst)
 {
-    abortf("mock %s() not implemented yet\n", __func__); // TODO
+    abortf("Not implemented yet\n");
 }
 
 int mock_linux_mkdir(char *path, mode_t mode)
@@ -657,20 +738,20 @@ int mock_linux_mkdir(char *path, mode_t mode)
     ensure_os(proc, OS_LINUX, __func__);
 
     // LittleFS doesn't use mode, but we accept it for API compatibility
-    (void)mode;
+    (void) mode;
 
-    int ret = lfs_mkdir(&proc->lfs, path);
+    int ret = proc_mkdir(proc, path);
     if (ret < 0) {
         switch (ret) {
-        case LFS_ERR_EXIST:
-            proc->errno_ = EEXIST;
+        case PROC_ERROR_EXIST:
+            *proc_errno_ptr(proc) = EEXIST;
             return -1;
-        case LFS_ERR_NOENT:
+        case PROC_ERROR_NOENT:
             // Parent directory doesn't exist
-            proc->errno_ = ENOENT;
+            *proc_errno_ptr(proc) = ENOENT;
             return -1;
         default:
-            proc->errno_ = EIO;
+            *proc_errno_ptr(proc) = EIO;
             return -1;
         }
     }
@@ -698,9 +779,65 @@ int mock_linux_closedir(DIR *dirp)
     abortf("mock %s() not implemented yet\n", __func__); // TODO
 }
 
+int mock_windows_GetLastError(void)
+{
+    Proc *proc = proc_current();
+    if (proc == NULL)
+        abortf("Call to %s() with no node scheduled\n", __func__);
+
+    ensure_os(proc, OS_WINDOWS, __func__);
+
+    // Note that technically on windows errno and GetLastError
+    // are different things. Here we use errno_ to store the
+    // GetLastError value and assume the user will not access
+    // errno.
+    return *proc_errno_ptr(proc);
+}
+
+int mock_windows_WSAGetLastError(void)
+{
+    return mock_windows_GetLastError();
+}
+
+void mock_windows_SetLastError(int err)
+{
+    Proc *proc = proc_current();
+    if (proc == NULL)
+        abortf("Call to %s() with no node scheduled\n", __func__);
+
+    ensure_os(proc, OS_WINDOWS, __func__);
+
+    *proc_errno_ptr(proc) = err;
+}
+
+void mock_windows_WSASetLastError(int err)
+{
+    return mock_windows_SetLastError(err);
+}
+
 int mock_windows_closesocket(SOCKET fd)
 {
-    abortf("mock %s() not implemented yet\n", __func__); // TODO
+    Proc *proc = proc_current();
+    if (proc == NULL)
+        abortf("Call to %s() with no node scheduled\n", __func__);
+
+    ensure_os(proc, OS_WINDOWS, __func__);
+
+    int desc_idx = fd;
+    int ret = proc_close(proc, desc_idx, true);  // expect_socket = true
+    if (ret < 0) {
+        switch (ret) {
+        case PROC_ERROR_BADIDX:
+        case PROC_ERROR_NOTSOCK:
+            // Windows uses WSAGetLastError(), but for simplicity we just return error
+            return -1;
+        default:
+            break;
+        }
+        return -1;
+    }
+
+    return 0;
 }
 
 int mock_windows_ioctlsocket(SOCKET fd, long cmd, u_long *argp)
@@ -755,22 +892,71 @@ BOOL mock_windows_GetFileSizeEx(HANDLE handle, LARGE_INTEGER *buf)
 
 BOOL mock_windows_QueryPerformanceCounter(LARGE_INTEGER *lpPerformanceCount)
 {
-    abortf("mock %s() not implemented yet\n", __func__); // TODO
+    Proc *proc = proc_current();
+    if (proc == NULL)
+        abortf("Call to %s() with no node scheduled\n", __func__);
+
+    ensure_os(proc, OS_WINDOWS, __func__);
+
+    if (lpPerformanceCount == NULL)
+        return 0;  // FALSE
+
+    // Get current time in nanoseconds and convert to performance counter units
+    // We use nanoseconds directly as the counter value (frequency = 1,000,000,000)
+    Nanos now = proc_time(proc);
+    lpPerformanceCount->QuadPart = (LONGLONG)now;
+
+    return 1;  // TRUE
 }
 
 BOOL mock_windows_QueryPerformanceFrequency(LARGE_INTEGER *lpFrequency)
 {
-    abortf("mock %s() not implemented yet\n", __func__); // TODO
+    Proc *proc = proc_current();
+    if (proc == NULL)
+        abortf("Call to %s() with no node scheduled\n", __func__);
+
+    ensure_os(proc, OS_WINDOWS, __func__);
+
+    if (lpFrequency == NULL)
+        return 0;  // FALSE
+
+    // Frequency is 1 billion (nanoseconds per second)
+    // This matches our counter which counts in nanoseconds
+    lpFrequency->QuadPart = 1000000000LL;
+
+    return 1;  // TRUE
 }
 
 char *mock_windows__fullpath(char *path, char *dst, int cap)
 {
-    abortf("mock %s() not implemented yet\n", __func__); // TODO
+    abortf("Not implemented yet\n");
 }
 
 int mock_windows__mkdir(char *path)
 {
-    abortf("mock %s() not implemented yet\n", __func__); // TODO
+    Proc *proc = proc_current();
+    if (proc == NULL)
+        abortf("Call to %s() with no node scheduled\n", __func__);
+
+    ensure_os(proc, OS_WINDOWS, __func__);
+
+    int ret = proc_mkdir(proc, path);
+    if (ret < 0) {
+        switch (ret) {
+        case PROC_ERROR_EXIST:
+            *proc_errno_ptr(proc) = EEXIST;
+            return -1;
+        case PROC_ERROR_NOENT:
+            // Parent directory doesn't exist
+            *proc_errno_ptr(proc) = ENOENT;
+            return -1;
+        default:
+            *proc_errno_ptr(proc) = EIO;
+            return -1;
+        }
+    }
+
+    return 0;
 }
 
 HANDLE mock_windows_FindFirstFileA(char *lpFileName, WIN32_FIND_DATAA *lpFindFileData)

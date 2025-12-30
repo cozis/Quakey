@@ -52,6 +52,17 @@ enum {
     CLOCK_MONOTONIC,
 };
 
+// lseek whence values
+enum {
+    MOCK_SEEK_SET = 0,
+    MOCK_SEEK_CUR = 1,
+    MOCK_SEEK_END = 2,
+};
+
+#define SEEK_SET MOCK_SEEK_SET
+#define SEEK_CUR MOCK_SEEK_CUR
+#define SEEK_END MOCK_SEEK_END
+
 typedef int64_t time_t;
 
 struct timespec {
@@ -174,10 +185,24 @@ struct sockaddr_in6 {
 typedef int clockid_t;
 typedef int mode_t;
 typedef unsigned long u_long;
+typedef int64_t off_t;
 
-struct stat;
+// Simplified stat structure for mock
+struct stat {
+    mode_t   st_mode;     // File mode (type and permissions)
+    off_t    st_size;     // Total size, in bytes
+    time_t   st_atime;    // Time of last access
+    time_t   st_mtime;    // Time of last modification
+    time_t   st_ctime;    // Time of last status change
+};
 
-struct timespec;
+// File type mode bits
+#define S_IFMT   0170000  // Mask for file type
+#define S_IFREG  0100000  // Regular file
+#define S_IFDIR  0040000  // Directory
+
+#define S_ISREG(m)  (((m) & S_IFMT) == S_IFREG)
+#define S_ISDIR(m)  (((m) & S_IFMT) == S_IFDIR)
 
 #define errno (*mock_errno_ptr())
 
