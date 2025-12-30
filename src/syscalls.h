@@ -26,6 +26,8 @@ enum {
     EADDRNOTAVAIL,
     ENOTEMPTY,
     EEXIST,
+    ENOMEM,
+    ERANGE,
 };
 
 typedef int            BOOL;

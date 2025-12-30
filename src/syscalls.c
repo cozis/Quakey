@@ -1404,7 +1404,110 @@ BOOL mock_windows_QueryPerformanceFrequency(LARGE_INTEGER *lpFrequency)
 
 char *mock_windows__fullpath(char *path, char *dst, int cap)
 {
-    abortf("Not implemented yet\n");
+    Proc *proc = proc_current();
+    if (proc == NULL)
+        abortf("Call to %s() with no node scheduled\n", __func__);
+
+    ensure_os(proc, OS_WINDOWS, __func__);
+
+    if (path == NULL) {
+        *proc_errno_ptr(proc) = EINVAL;
+        return NULL;
+    }
+
+    // Temporary buffer for path normalization
+    // We'll build the absolute path here
+    char temp[4096];
+    int temp_len = 0;
+
+    // Copy path to temp, converting backslashes to forward slashes
+    for (int i = 0; path[i] != '\0' && temp_len < (int)sizeof(temp) - 1; i++) {
+        if (path[i] == '\\') {
+            temp[temp_len++] = '/';
+        } else {
+            temp[temp_len++] = path[i];
+        }
+    }
+    temp[temp_len] = '\0';
+
+    // Result buffer for the normalized absolute path
+    char result[4096];
+    int result_len = 0;
+
+    // If path doesn't start with '/', prepend '/' (mock has no CWD, uses root)
+    const char *src = temp;
+    if (temp[0] != '/') {
+        result[result_len++] = '/';
+    }
+
+    // Parse path components and resolve . and ..
+    while (*src != '\0') {
+        // Skip consecutive slashes
+        while (*src == '/') src++;
+
+        if (*src == '\0') break;
+
+        // Find end of this component
+        const char *end = src;
+        while (*end != '\0' && *end != '/') end++;
+
+        int comp_len = (int)(end - src);
+
+        if (comp_len == 1 && src[0] == '.') {
+            // Current directory - skip it
+        } else if (comp_len == 2 && src[0] == '.' && src[1] == '.') {
+            // Parent directory - remove last component from result
+            if (result_len > 1) {
+                // Find the last slash before the current position
+                result_len--;  // Move back from current position
+                while (result_len > 0 && result[result_len - 1] != '/') {
+                    result_len--;
+                }
+                if (result_len == 0) {
+                    result_len = 1;  // Keep the root slash
+                }
+            }
+        } else {
+            // Regular component - add it
+            if (result_len > 1 || (result_len == 1 && result[0] != '/')) {
+                if (result_len < (int)sizeof(result) - 1)
+                    result[result_len++] = '/';
+            }
+            for (int i = 0; i < comp_len && result_len < (int)sizeof(result) - 1; i++) {
+                result[result_len++] = src[i];
+            }
+        }
+
+        src = end;
+    }
+
+    // Ensure we have at least root
+    if (result_len == 0) {
+        result[result_len++] = '/';
+    }
+    result[result_len] = '\0';
+
+    // Allocate buffer if dst is NULL
+    if (dst == NULL) {
+        dst = rpmalloc(result_len + 1);
+        if (dst == NULL) {
+            *proc_errno_ptr(proc) = ENOMEM;
+            return NULL;
+        }
+    } else {
+        // Check if result fits in the provided buffer
+        if (result_len + 1 > cap) {
+            *proc_errno_ptr(proc) = ERANGE;
+            return NULL;
+        }
+    }
+
+    // Copy result to destination
+    for (int i = 0; i <= result_len; i++) {
+        dst[i] = result[i];
+    }
+
+    return dst;
 }
 
 int mock_windows__mkdir(char *path)
