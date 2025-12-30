@@ -728,7 +728,116 @@ int mock_linux_mkstemp(char *path)
 
 char *mock_linux_realpath(char *path, char *dst)
 {
-    abortf("Not implemented yet\n");
+    Proc *proc = proc_current();
+    if (proc == NULL)
+        abortf("Call to %s() with no node scheduled\n", __func__);
+
+    ensure_os(proc, OS_LINUX, __func__);
+
+    if (path == NULL) {
+        *proc_errno_ptr(proc) = EINVAL;
+        return NULL;
+    }
+
+    // Temporary buffer for path normalization
+    char temp[4096];
+    int temp_len = 0;
+
+    // Copy path to temp
+    for (int i = 0; path[i] != '\0' && temp_len < (int)sizeof(temp) - 1; i++) {
+        temp[temp_len++] = path[i];
+    }
+    temp[temp_len] = '\0';
+
+    // Result buffer for the normalized absolute path
+    char result[4096];
+    int result_len = 0;
+
+    // If path doesn't start with '/', prepend '/' (mock has no CWD, uses root)
+    const char *src = temp;
+    if (temp[0] != '/') {
+        result[result_len++] = '/';
+    }
+
+    // Parse path components and resolve . and ..
+    while (*src != '\0') {
+        // Skip consecutive slashes
+        while (*src == '/') src++;
+
+        if (*src == '\0') break;
+
+        // Find end of this component
+        const char *end = src;
+        while (*end != '\0' && *end != '/') end++;
+
+        int comp_len = (int)(end - src);
+
+        if (comp_len == 1 && src[0] == '.') {
+            // Current directory - skip it
+        } else if (comp_len == 2 && src[0] == '.' && src[1] == '.') {
+            // Parent directory - remove last component from result
+            if (result_len > 1) {
+                // Find the last slash before the current position
+                result_len--;  // Move back from current position
+                while (result_len > 0 && result[result_len - 1] != '/') {
+                    result_len--;
+                }
+                if (result_len == 0) {
+                    result_len = 1;  // Keep the root slash
+                }
+            }
+        } else {
+            // Regular component - add it
+            if (result_len > 1 || (result_len == 1 && result[0] != '/')) {
+                if (result_len < (int)sizeof(result) - 1)
+                    result[result_len++] = '/';
+            }
+            for (int i = 0; i < comp_len && result_len < (int)sizeof(result) - 1; i++) {
+                result[result_len++] = src[i];
+            }
+        }
+
+        src = end;
+    }
+
+    // Ensure we have at least root
+    if (result_len == 0) {
+        result[result_len++] = '/';
+    }
+    result[result_len] = '\0';
+
+    // Unlike _fullpath, realpath requires the path to exist
+    // Try to open as file first, then as directory
+    int fd = proc_open_file(proc, result, LFS_O_RDONLY);
+    if (fd >= 0) {
+        proc_close(proc, fd, false);
+    } else {
+        // Try as directory
+        fd = proc_open_dir(proc, result);
+        if (fd >= 0) {
+            proc_close(proc, fd, false);
+        } else {
+            // Path doesn't exist
+            *proc_errno_ptr(proc) = ENOENT;
+            return NULL;
+        }
+    }
+
+    // Allocate buffer if dst is NULL
+    if (dst == NULL) {
+        dst = rpmalloc(result_len + 1);
+        if (dst == NULL) {
+            *proc_errno_ptr(proc) = ENOMEM;
+            return NULL;
+        }
+    }
+
+    // Copy result to destination
+    for (int i = 0; i <= result_len; i++) {
+        dst[i] = result[i];
+    }
+
+    return dst;
 }
 
 int mock_linux_mkdir(char *path, mode_t mode)
