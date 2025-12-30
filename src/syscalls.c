@@ -1350,5 +1350,79 @@ BOOL mock_windows_FindClose(HANDLE hFindFile)
 
 BOOL mock_windows_MoveFileExW(WCHAR *lpExistingFileName, WCHAR *lpNewFileName, DWORD dwFlags)
 {
-    abortf("mock %s() not implemented yet\n", __func__); // TODO
+    Proc *proc = proc_current();
+    if (proc == NULL)
+        abortf("Call to %s() with no node scheduled\n", __func__);
+
+    ensure_os(proc, OS_WINDOWS, __func__);
+
+    // Validate parameters
+    if (lpExistingFileName == NULL) {
+        *proc_errno_ptr(proc) = ERROR_INVALID_PARAMETER;
+        return 0;  // FALSE
+    }
+
+    // lpNewFileName can be NULL only with MOVEFILE_DELAY_UNTIL_REBOOT
+    // (marks file for deletion on reboot), but we don't support that
+    if (lpNewFileName == NULL) {
+        if (dwFlags & MOVEFILE_DELAY_UNTIL_REBOOT) {
+            // We don't simulate reboot, so just succeed without doing anything
+            *proc_errno_ptr(proc) = ERROR_SUCCESS;
+            return 1;  // TRUE
+        }
+        *proc_errno_ptr(proc) = ERROR_INVALID_PARAMETER;
+        return 0;  // FALSE
+    }
+
+    // Convert wide string paths to narrow strings
+    char oldpath[MAX_PATH];
+    char newpath[MAX_PATH];
+
+    if (wchar_to_char(lpExistingFileName, oldpath, MAX_PATH) < 0) {
+        *proc_errno_ptr(proc) = ERROR_INVALID_PARAMETER;
+        return 0;  // FALSE
+    }
+
+    if (wchar_to_char(lpNewFileName, newpath, MAX_PATH) < 0) {
+        *proc_errno_ptr(proc) = ERROR_INVALID_PARAMETER;
+        return 0;  // FALSE
+    }
+
+    // If MOVEFILE_REPLACE_EXISTING is not set and destination exists, fail
+    // We need to check this before calling proc_rename
+    if (!(dwFlags & MOVEFILE_REPLACE_EXISTING)) {
+        // Try to check if destination exists by attempting to open it
+        int check = proc_open_file(proc, newpath, LFS_O_RDONLY);
+        if (check >= 0) {
+            // File exists, close it and return error
+            proc_close(proc, check, false);
+            *proc_errno_ptr(proc) = ERROR_ALREADY_EXISTS;
+            return 0;  // FALSE
+        }
+    }
+
+    int ret = proc_rename(proc, oldpath, newpath);
+    if (ret < 0) {
+        switch (ret) {
+        case PROC_ERROR_NOENT:
+            *proc_errno_ptr(proc) = ERROR_FILE_NOT_FOUND;
+            break;
+        case PROC_ERROR_EXIST:
+            *proc_errno_ptr(proc) = ERROR_ALREADY_EXISTS;
+            break;
+        case PROC_ERROR_NOTEMPTY:
+            *proc_errno_ptr(proc) = ERROR_ACCESS_DENIED;
+            break;
+        case PROC_ERROR_ISDIR:
+            *proc_errno_ptr(proc) = ERROR_ACCESS_DENIED;
+            break;
+        default:
+            *proc_errno_ptr(proc) = ERROR_ACCESS_DENIED;
+            break;
+        }
+        return 0;  // FALSE
+    }
+
+    *proc_errno_ptr(proc) = ERROR_SUCCESS;
+    return 1;  // TRUE
 }

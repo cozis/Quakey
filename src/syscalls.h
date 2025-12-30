@@ -326,6 +326,13 @@ int mock_windows__mkdir(char *path);
 int mock_linux_remove(char *path);
 
 int  mock_linux_rename(char *oldpath, char *newpath);
+
+// MoveFileExW dwFlags flags
+#define MOVEFILE_REPLACE_EXISTING      0x00000001
+#define MOVEFILE_COPY_ALLOWED          0x00000002
+#define MOVEFILE_DELAY_UNTIL_REBOOT    0x00000004
+#define MOVEFILE_WRITE_THROUGH         0x00000008
+
 BOOL mock_windows_MoveFileExW(WCHAR *lpExistingFileName, WCHAR *lpNewFileName, DWORD dwFlags);
 
 char *mock_linux_realpath(char *path, char *dst);
