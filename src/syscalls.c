@@ -1,5 +1,5 @@
 #include "syscalls.h"
-#include "proc.h"
+#include "sim.h"
 
 #include <stdio.h>
 #include <stdarg.h>
