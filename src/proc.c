@@ -287,6 +287,8 @@ int proc_init(Proc *proc,
     if (proc->arg == NULL)
         return -1;
     proc->argc = split_args(proc->arg, proc->argv, PROC_ARGC_LIMIT);
+    if (proc->argc < 0)
+        return -1;
 
     proc->init_func = init_func;
     proc->tick_func = tick_func;
