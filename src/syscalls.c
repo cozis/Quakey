@@ -894,14 +894,160 @@ int mock_windows_ioctlsocket(SOCKET fd, long cmd, unsigned long *argp)
     abortf("mock %s() not implemented yet\n", __func__); // TODO
 }
 
+// Helper function to convert wide string to narrow string (ASCII subset)
+static int wchar_to_char(WCHAR *src, char *dst, int dst_size)
+{
+    int i = 0;
+    while (src[i] != 0) {
+        if (i >= dst_size - 1)
+            return -1;  // Buffer too small
+        if (src[i] > 127)
+            return -1;  // Non-ASCII character
+        dst[i] = (char) src[i];
+        i++;
+    }
+    dst[i] = '\0';
+    return i;  // Return length
+}
+
+// Convert Windows access flags and creation disposition to LFS flags
+static int convert_windows_flags_to_lfs(DWORD dwDesiredAccess, DWORD dwCreationDisposition, bool *truncate)
+{
+    int lfs_flags = 0;
+
+    // Convert access mode
+    if ((dwDesiredAccess & GENERIC_READ) && (dwDesiredAccess & GENERIC_WRITE))
+        lfs_flags = LFS_O_RDWR;
+    else if (dwDesiredAccess & GENERIC_WRITE)
+        lfs_flags = LFS_O_WRONLY;
+    else
+        lfs_flags = LFS_O_RDONLY;
+
+    *truncate = false;
+
+    // Convert creation disposition
+    switch (dwCreationDisposition) {
+    case CREATE_NEW:
+        // Creates a new file, fails if file exists
+        lfs_flags |= LFS_O_CREAT | LFS_O_EXCL;
+        break;
+    case CREATE_ALWAYS:
+        // Creates a new file, always (truncates if exists)
+        lfs_flags |= LFS_O_CREAT | LFS_O_TRUNC;
+        *truncate = true;
+        break;
+    case OPEN_EXISTING:
+        // Opens file only if it exists, fails otherwise
+        // No extra flags needed - LFS will fail if file doesn't exist
+        break;
+    case OPEN_ALWAYS:
+        // Opens file if it exists, creates if it doesn't
+        lfs_flags |= LFS_O_CREAT;
+        break;
+    case TRUNCATE_EXISTING:
+        // Opens and truncates, fails if file doesn't exist
+        lfs_flags |= LFS_O_TRUNC;
+        *truncate = true;
+        break;
+    default:
+        return -1;  // Invalid creation disposition
+    }
+
+    return lfs_flags;
+}
+
 HANDLE mock_windows_CreateFileW(WCHAR *lpFileName, DWORD dwDesiredAccess, DWORD dwShareMode, LPSECURITY_ATTRIBUTES lpSecurityAttributes, DWORD dwCreationDisposition, DWORD dwFlagsAndAttributes, HANDLE hTemplateFile)
 {
-    abortf("mock %s() not implemented yet\n", __func__); // TODO
+    Proc *proc = proc_current();
+    if (proc == NULL)
+        abortf("Call to %s() with no node scheduled\n", __func__);
+
+    ensure_os(proc, OS_WINDOWS, __func__);
+
+    // lpSecurityAttributes and hTemplateFile are typically NULL
+    (void) lpSecurityAttributes;
+    (void) hTemplateFile;
+    (void) dwShareMode;  // Share mode not implemented in simulation
+    (void) dwFlagsAndAttributes;  // Attributes not implemented in simulation
+
+    // Convert wide string path to narrow string
+    char path[MAX_PATH];
+    if (wchar_to_char(lpFileName, path, MAX_PATH) < 0) {
+        *proc_errno_ptr(proc) = ERROR_INVALID_PARAMETER;
+        return INVALID_HANDLE_VALUE;
+    }
+
+    // Convert Windows flags to LFS flags
+    bool truncate;
+    int lfs_flags = convert_windows_flags_to_lfs(dwDesiredAccess, dwCreationDisposition, &truncate);
+    if (lfs_flags < 0) {
+        *proc_errno_ptr(proc) = ERROR_INVALID_PARAMETER;
+        return INVALID_HANDLE_VALUE;
+    }
+
+    int ret = proc_open_file(proc, path, lfs_flags);
+    if (ret < 0) {
+        switch (ret) {
+        case PROC_ERROR_FULL:
+            *proc_errno_ptr(proc) = ERROR_NOT_ENOUGH_MEMORY;
+            return INVALID_HANDLE_VALUE;
+        case PROC_ERROR_EXISTS:
+            // CREATE_NEW with existing file
+            *proc_errno_ptr(proc) = ERROR_FILE_EXISTS;
+            return INVALID_HANDLE_VALUE;
+        case PROC_ERROR_NOENT:
+            *proc_errno_ptr(proc) = ERROR_FILE_NOT_FOUND;
+            return INVALID_HANDLE_VALUE;
+        default:
+            *proc_errno_ptr(proc) = ERROR_ACCESS_DENIED;
+            return INVALID_HANDLE_VALUE;
+        }
+    }
+
+    int desc_idx = ret;
+
+    // For OPEN_ALWAYS, if the file already existed, set ERROR_ALREADY_EXISTS
+    // (but still return success). This is Windows behavior.
+    if (dwCreationDisposition == OPEN_ALWAYS) {
+        // We can't easily detect this case here, so we skip it for now
+        // A full implementation would check if the file was newly created
+    }
+
+    *proc_errno_ptr(proc) = ERROR_SUCCESS;
+    return (HANDLE)(long long)desc_idx;
 }
 
 BOOL mock_windows_CloseHandle(HANDLE handle)
 {
-    abortf("mock %s() not implemented yet\n", __func__); // TODO
+    Proc *proc = proc_current();
+    if (proc == NULL)
+        abortf("Call to %s() with no node scheduled\n", __func__);
+
+    ensure_os(proc, OS_WINDOWS, __func__);
+
+    if (handle == INVALID_HANDLE_VALUE || handle == NULL) {
+        *proc_errno_ptr(proc) = ERROR_INVALID_HANDLE;
+        return 0;  // FALSE
+    }
+
+    int desc_idx = (int)(long long)handle;
+
+    // CloseHandle is for file handles, not sockets
+    // (sockets use closesocket on Windows)
+    int ret = proc_close(proc, desc_idx, false);
+    if (ret < 0) {
+        switch (ret) {
+        case PROC_ERROR_BADIDX:
+            *proc_errno_ptr(proc) = ERROR_INVALID_HANDLE;
+            return 0;  // FALSE
+        default:
+            *proc_errno_ptr(proc) = ERROR_INVALID_HANDLE;
+            return 0;  // FALSE
+        }
+    }
+
+    *proc_errno_ptr(proc) = ERROR_SUCCESS;
+    return 1;  // TRUE
 }
 
 BOOL mock_windows_LockFile(HANDLE hFile, DWORD dwFileOffsetLow, DWORD dwFileOffsetHigh, DWORD nNumberOfBytesToLockLow, DWORD nNumberOfBytesToLockHigh)
@@ -921,22 +1067,201 @@ BOOL mock_windows_FlushFileBuffers(HANDLE handle)
 
 BOOL mock_windows_ReadFile(HANDLE handle, char *dst, DWORD len, DWORD *num, OVERLAPPED *ov)
 {
-    abortf("mock %s() not implemented yet\n", __func__); // TODO
+    Proc *proc = proc_current();
+    if (proc == NULL)
+        abortf("Call to %s() with no node scheduled\n", __func__);
+
+    ensure_os(proc, OS_WINDOWS, __func__);
+
+    // We don't support overlapped (async) I/O
+    if (ov != NULL)
+        abortf("Quakey does not support overlapped I/O in ReadFile\n");
+
+    if (handle == INVALID_HANDLE_VALUE || handle == NULL) {
+        *proc_errno_ptr(proc) = ERROR_INVALID_HANDLE;
+        return 0;  // FALSE
+    }
+
+    if (dst == NULL && len > 0) {
+        *proc_errno_ptr(proc) = ERROR_INVALID_PARAMETER;
+        return 0;  // FALSE
+    }
+
+    int desc_idx = (int)(long long)handle;
+
+    int ret = proc_read(proc, desc_idx, dst, (int)len);
+    if (ret < 0) {
+        switch (ret) {
+        case PROC_ERROR_BADIDX:
+            *proc_errno_ptr(proc) = ERROR_INVALID_HANDLE;
+            return 0;  // FALSE
+        case PROC_ERROR_BADARG:
+        case PROC_ERROR_ISDIR:
+            *proc_errno_ptr(proc) = ERROR_ACCESS_DENIED;
+            return 0;  // FALSE
+        case PROC_ERROR_IO:
+        default:
+            *proc_errno_ptr(proc) = ERROR_ACCESS_DENIED;
+            return 0;  // FALSE
+        }
+    }
+
+    if (num != NULL)
+        *num = (DWORD)ret;
+
+    *proc_errno_ptr(proc) = ERROR_SUCCESS;
+    return 1;  // TRUE
 }
 
 BOOL mock_windows_WriteFile(HANDLE handle, char *src, DWORD len, DWORD *num, OVERLAPPED *ov)
 {
-    abortf("mock %s() not implemented yet\n", __func__); // TODO
+    Proc *proc = proc_current();
+    if (proc == NULL)
+        abortf("Call to %s() with no node scheduled\n", __func__);
+
+    ensure_os(proc, OS_WINDOWS, __func__);
+
+    // We don't support overlapped (async) I/O
+    if (ov != NULL)
+        abortf("Quakey does not support overlapped I/O in WriteFile\n");
+
+    if (handle == INVALID_HANDLE_VALUE || handle == NULL) {
+        *proc_errno_ptr(proc) = ERROR_INVALID_HANDLE;
+        return 0;  // FALSE
+    }
+
+    if (src == NULL && len > 0) {
+        *proc_errno_ptr(proc) = ERROR_INVALID_PARAMETER;
+        return 0;  // FALSE
+    }
+
+    int desc_idx = (int)(long long)handle;
+
+    int ret = proc_write(proc, desc_idx, src, (int)len);
+    if (ret < 0) {
+        switch (ret) {
+        case PROC_ERROR_BADIDX:
+            *proc_errno_ptr(proc) = ERROR_INVALID_HANDLE;
+            return 0;  // FALSE
+        case PROC_ERROR_IO:
+        default:
+            *proc_errno_ptr(proc) = ERROR_ACCESS_DENIED;
+            return 0;  // FALSE
+        }
+    }
+
+    if (num != NULL)
+        *num = (DWORD)ret;
+
+    *proc_errno_ptr(proc) = ERROR_SUCCESS;
+    return 1;  // TRUE
 }
 
 DWORD mock_windows_SetFilePointer(HANDLE hFile, LONG lDistanceToMove, PLONG lpDistanceToMoveHigh, DWORD dwMoveMethod)
 {
-    abortf("mock %s() not implemented yet\n", __func__); // TODO
+    Proc *proc = proc_current();
+    if (proc == NULL)
+        abortf("Call to %s() with no node scheduled\n", __func__);
+
+    ensure_os(proc, OS_WINDOWS, __func__);
+
+    if (hFile == INVALID_HANDLE_VALUE || hFile == NULL) {
+        *proc_errno_ptr(proc) = ERROR_INVALID_HANDLE;
+        return INVALID_SET_FILE_POINTER;
+    }
+
+    int desc_idx = (int)(long long)hFile;
+
+    // Convert Windows move method to PROC whence
+    int proc_whence;
+    switch (dwMoveMethod) {
+    case FILE_BEGIN:
+        proc_whence = PROC_SEEK_SET;
+        break;
+    case FILE_CURRENT:
+        proc_whence = PROC_SEEK_CUR;
+        break;
+    case FILE_END:
+        proc_whence = PROC_SEEK_END;
+        break;
+    default:
+        *proc_errno_ptr(proc) = ERROR_INVALID_PARAMETER;
+        return INVALID_SET_FILE_POINTER;
+    }
+
+    // Build 64-bit offset
+    int64_t offset;
+    if (lpDistanceToMoveHigh != NULL) {
+        // 64-bit seek: combine high and low parts
+        offset = ((int64_t)(*lpDistanceToMoveHigh) << 32) | ((uint32_t)lDistanceToMove);
+    } else {
+        // 32-bit seek: use signed extension
+        offset = (int64_t)lDistanceToMove;
+    }
+
+    int ret = proc_lseek(proc, desc_idx, offset, proc_whence);
+    if (ret < 0) {
+        switch (ret) {
+        case PROC_ERROR_BADIDX:
+            *proc_errno_ptr(proc) = ERROR_INVALID_HANDLE;
+            return INVALID_SET_FILE_POINTER;
+        case PROC_ERROR_BADARG:
+            *proc_errno_ptr(proc) = ERROR_NEGATIVE_SEEK;
+            return INVALID_SET_FILE_POINTER;
+        default:
+            *proc_errno_ptr(proc) = ERROR_INVALID_PARAMETER;
+            return INVALID_SET_FILE_POINTER;
+        }
+    }
+
+    int64_t new_pos = (int64_t)ret;
+
+    // Set high part if requested
+    if (lpDistanceToMoveHigh != NULL)
+        *lpDistanceToMoveHigh = (LONG)(new_pos >> 32);
+
+    *proc_errno_ptr(proc) = ERROR_SUCCESS;
+    return (DWORD)(new_pos & 0xFFFFFFFF);
 }
 
 BOOL mock_windows_GetFileSizeEx(HANDLE handle, LARGE_INTEGER *buf)
 {
-    abortf("mock %s() not implemented yet\n", __func__); // TODO
+    Proc *proc = proc_current();
+    if (proc == NULL)
+        abortf("Call to %s() with no node scheduled\n", __func__);
+
+    ensure_os(proc, OS_WINDOWS, __func__);
+
+    if (handle == INVALID_HANDLE_VALUE || handle == NULL) {
+        *proc_errno_ptr(proc) = ERROR_INVALID_HANDLE;
+        return 0;  // FALSE
+    }
+
+    if (buf == NULL) {
+        *proc_errno_ptr(proc) = ERROR_INVALID_PARAMETER;
+        return 0;  // FALSE
+    }
+
+    int desc_idx = (int)(long long)handle;
+
+    FileInfo info;
+    int ret = proc_fileinfo(proc, desc_idx, &info);
+    if (ret < 0) {
+        switch (ret) {
+        case PROC_ERROR_BADIDX:
+            *proc_errno_ptr(proc) = ERROR_INVALID_HANDLE;
+            return 0;  // FALSE
+        case PROC_ERROR_IO:
+        default:
+            *proc_errno_ptr(proc) = ERROR_ACCESS_DENIED;
+            return 0;  // FALSE
+        }
+    }
+
+    buf->QuadPart = (LONGLONG)info.size;
+
+    *proc_errno_ptr(proc) = ERROR_SUCCESS;
+    return 1;  // TRUE
 }
 
 BOOL mock_windows_QueryPerformanceCounter(LARGE_INTEGER *lpPerformanceCount)

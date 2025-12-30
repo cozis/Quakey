@@ -191,6 +191,50 @@ typedef wchar_t WCHAR;
 typedef void*   LPVOID;
 typedef LPVOID  HANDLE;
 
+// Special handle value for invalid handles
+#define INVALID_HANDLE_VALUE ((HANDLE)(long long)-1)
+
+// CreateFileW dwDesiredAccess flags
+#define GENERIC_READ    0x80000000
+#define GENERIC_WRITE   0x40000000
+#define GENERIC_EXECUTE 0x20000000
+#define GENERIC_ALL     0x10000000
+
+// CreateFileW dwShareMode flags
+#define FILE_SHARE_READ   0x00000001
+#define FILE_SHARE_WRITE  0x00000002
+#define FILE_SHARE_DELETE 0x00000004
+
+// CreateFileW dwCreationDisposition values
+#define CREATE_NEW        1
+#define CREATE_ALWAYS     2
+#define OPEN_EXISTING     3
+#define OPEN_ALWAYS       4
+#define TRUNCATE_EXISTING 5
+
+// CreateFileW dwFlagsAndAttributes flags (common ones)
+#define FILE_ATTRIBUTE_NORMAL 0x00000080
+
+// SetFilePointer dwMoveMethod values
+#define FILE_BEGIN   0
+#define FILE_CURRENT 1
+#define FILE_END     2
+
+// SetFilePointer error return value
+#define INVALID_SET_FILE_POINTER ((DWORD)-1)
+
+// Windows error codes
+#define ERROR_SUCCESS             0
+#define ERROR_FILE_NOT_FOUND      2
+#define ERROR_PATH_NOT_FOUND      3
+#define ERROR_ACCESS_DENIED       5
+#define ERROR_INVALID_HANDLE      6
+#define ERROR_NOT_ENOUGH_MEMORY   8
+#define ERROR_INVALID_PARAMETER   87
+#define ERROR_ALREADY_EXISTS      183
+#define ERROR_FILE_EXISTS         80
+#define ERROR_NEGATIVE_SEEK       131
+
 typedef struct _SECURITY_ATTRIBUTES {
     DWORD           nLength;
     LPVOID          lpSecurityDescriptor;
