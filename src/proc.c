@@ -257,8 +257,10 @@ static int split_args(char *arg, char **argv, int max_argc)
         while (cur < len && arg[cur] != ' ' && arg[cur] != '\t')
             cur++;
 
-        arg[cur] = '\0';
-        cur++;
+        if (cur < len) {
+            arg[cur] = '\0';
+            cur++;
+        }
 
         if (argc == max_argc)
             return -1;
