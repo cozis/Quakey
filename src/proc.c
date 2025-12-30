@@ -404,12 +404,9 @@ int proc_restart(Proc *proc, bool wipe_disk)
     rpfree(proc->state);
 
     // Close all descriptors
-    for (int i = 0; i < PROC_DESC_LIMIT; i++) {
-        if (proc->desc[i].type != DESC_EMPTY) {
+    for (int i = 0; i < PROC_DESC_LIMIT; i++)
+        if (proc->desc[i].type != DESC_EMPTY)
             desc_free(&proc->desc[i], &proc->lfs, true);
-            proc->desc[i].type = DESC_EMPTY;
-        }
-    }
     proc->num_desc = 0;
 
     // Unmount filesystem
@@ -1520,4 +1517,46 @@ int proc_fsync(Proc *proc, int desc_idx)
 
     proc->current_time += pick_fsync_duration(proc);
     return 0;
+}
+
+static Nanos pick_setdescflags_duration(Proc *proc)
+{
+    (void) proc;
+    return 500;
+}
+
+int proc_setdescflags(Proc *proc, int desc_idx, int flags)
+{
+    if (!is_desc_idx_valid(proc, desc_idx))
+        return PROC_ERROR_BADIDX;
+    Desc *desc = &proc->desc[desc_idx];
+
+    // TODO: check the descriptor type
+
+    desc->non_blocking = (flags & PROC_FLAG_NONBLOCK) != 0;
+
+    proc->current_time += pick_setdescflags_duration(proc);
+    return 0;
+}
+
+static Nanos pick_getdescflags_duration(Proc *proc)
+{
+    (void) proc;
+    return 500;
+}
+
+int proc_getdescflags(Proc *proc, int desc_idx)
+{
+    if (!is_desc_idx_valid(proc, desc_idx))
+        return PROC_ERROR_BADIDX;
+    Desc *desc = &proc->desc[desc_idx];
+
+    // TODO: check the descriptor type
+
+    int flags = 0;
+    if (desc->non_blocking)
+        flags |= PROC_FLAG_NONBLOCK;
+
+    proc->current_time = pick_getdescflags_duration(proc);
+    return flags;
 }

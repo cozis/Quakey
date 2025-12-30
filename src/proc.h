@@ -493,4 +493,14 @@ int proc_lseek(Proc *proc, int desc_idx, int64_t offset, int whence);
 // TODO: comment
 int proc_fsync(Proc *proc, int desc_idx);
 
+enum {
+    PROC_FLAG_NONBLOCK = 1,
+};
+
+// TODO: comment
+int proc_setdescflags(Proc *proc, int fd, int flags);
+
+// TODO: comment
+int proc_getdescflags(Proc *proc, int fd);
+
 #endif // PROC_INCLUDED

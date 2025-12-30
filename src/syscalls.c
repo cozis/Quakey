@@ -762,7 +762,55 @@ int mock_linux_mkdir(char *path, mode_t mode)
 
 int mock_linux_fcntl(int fd, int cmd, ...)
 {
-    abortf("mock %s() not implemented yet\n", __func__); // TODO
+    Proc *proc = proc_current();
+    if (proc == NULL)
+        abortf("Call to %s() with no node scheduled\n", __func__);
+
+    ensure_os(proc, OS_LINUX, __func__);
+
+    switch (cmd) {
+
+    case F_GETFL:
+        {
+            int ret = proc_getdescflags(proc, fd);
+            if (ret < 0) {
+                *proc_errno_ptr(proc) = EBADF;
+                return -1;
+            }
+
+            int flags = 0;
+            if (ret & PROC_FLAG_NONBLOCK)
+                flags |= O_NONBLOCK;
+
+            return flags;
+        }
+        break;
+
+    case F_SETFL:
+        {
+            va_list args;
+            va_start(args, cmd);
+            int flags = va_arg(args, int);
+            va_end(args);
+
+            int proc_flags = 0;
+            if (flags & O_NONBLOCK)
+                proc_flags |= PROC_FLAG_NONBLOCK;
+
+            int ret = proc_setdescflags(proc, fd, proc_flags);
+
+            if (ret < 0) {
+                *proc_errno_ptr(proc) = EBADF;
+                return -1;
+            }
+            return 0;
+        }
+        break;
+
+    default:
+        *proc_errno_ptr(proc) = EINVAL;
+        return -1;
+    }
 }
 
 DIR *mock_linux_opendir(char *name)
@@ -841,7 +889,7 @@ int mock_windows_closesocket(SOCKET fd)
     return 0;
 }
 
-int mock_windows_ioctlsocket(SOCKET fd, long cmd, u_long *argp)
+int mock_windows_ioctlsocket(SOCKET fd, long cmd, unsigned long *argp)
 {
     abortf("mock %s() not implemented yet\n", __func__); // TODO
 }
