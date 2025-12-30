@@ -1,11 +1,12 @@
 #ifndef SIM_INCLUDED
 #define SIM_INCLUDED
 
-#include <stdint.h>
-#include <limits.h>
 #include <quakey.h>
 
 #include "proc.h"
+
+#include <stdint.h>
+#include <limits.h>
 
 #define PID_MIN 300
 #define PID_MAX 10000

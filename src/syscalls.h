@@ -1,7 +1,8 @@
 #ifndef SYSCALLS_INCLUDED
 #define SYSCALLS_INCLUDED
 
-#include "proc.h"
+#include <stddef.h>
+#include <stdint.h>
 
 #define MAX_PATH 1024
 
@@ -54,14 +55,10 @@ enum {
 
 // lseek whence values
 enum {
-    MOCK_SEEK_SET = 0,
-    MOCK_SEEK_CUR = 1,
-    MOCK_SEEK_END = 2,
+    SEEK_SET = 0,
+    SEEK_CUR = 1,
+    SEEK_END = 2,
 };
-
-#define SEEK_SET MOCK_SEEK_SET
-#define SEEK_CUR MOCK_SEEK_CUR
-#define SEEK_END MOCK_SEEK_END
 
 typedef int64_t time_t;
 

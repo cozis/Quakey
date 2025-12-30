@@ -1,8 +1,8 @@
-#include <assert.h>
-
 #include "sim.h"
 #include "proc.h"
 #include "3p/rpmalloc.h"
+
+#include <assert.h>
 
 // Forward-declare here to avoid including stdlib.h
 void qsort(void *base, size_t nmemb, size_t size, int (*compar)(const void *, const void *));

@@ -1,13 +1,13 @@
 #ifndef PROC_INCLUDED
 #define PROC_INCLUDED
 
-#include <stdint.h>
-#include <stdbool.h>
-
 #include <quakey.h>
 
 #include "poll.h"
 #include "3p/lfs.h"
+
+#include <stdint.h>
+#include <stdbool.h>
 
 #define PROC_IPADDR_LIMIT 4
 

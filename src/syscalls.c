@@ -1,8 +1,9 @@
+#include "syscalls.h"
+#include "proc.h"
+
 #include <stdio.h>
 #include <stdarg.h>
 #include <assert.h>
-
-#include "syscalls.h"
 
 static void abortf(const char *fmt, ...)
 {

@@ -1,9 +1,9 @@
+#include "sim.h"
+#include "proc.h"
+
 #include <stdint.h>
 #include <string.h>
 #include <assert.h>
-
-#include "sim.h"
-#include "proc.h"
 
 #define MIN(X, Y) ((X) < (Y) ? (X) : (Y))
 
