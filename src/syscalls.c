@@ -1434,19 +1434,203 @@ int mock_windows__mkdir(char *path)
     return 0;
 }
 
+// Structure to track Windows find handle state
+typedef struct {
+    int fd;  // Descriptor index for the directory
+} FindHandle;
+
+// Helper function to populate WIN32_FIND_DATAA from a DirEntry
+static void populate_find_data(WIN32_FIND_DATAA *data, DirEntry *entry)
+{
+    // Clear the structure
+    for (int i = 0; i < (int)sizeof(WIN32_FIND_DATAA); i++)
+        ((char *)data)[i] = 0;
+
+    // Set file attributes
+    data->dwFileAttributes = entry->is_dir ? FILE_ATTRIBUTE_DIRECTORY : FILE_ATTRIBUTE_NORMAL;
+
+    // Copy filename
+    int i = 0;
+    while (entry->name[i] != '\0' && i < MAX_PATH - 1) {
+        data->cFileName[i] = entry->name[i];
+        i++;
+    }
+    data->cFileName[i] = '\0';
+}
+
 HANDLE mock_windows_FindFirstFileA(char *lpFileName, WIN32_FIND_DATAA *lpFindFileData)
 {
-    abortf("mock %s() not implemented yet\n", __func__); // TODO
+    Proc *proc = proc_current();
+    if (proc == NULL)
+        abortf("Call to %s() with no node scheduled\n", __func__);
+
+    ensure_os(proc, OS_WINDOWS, __func__);
+
+    if (lpFileName == NULL || lpFindFileData == NULL) {
+        *proc_errno_ptr(proc) = ERROR_INVALID_PARAMETER;
+        return INVALID_HANDLE_VALUE;
+    }
+
+    // Extract directory path from the search pattern
+    // The pattern is typically "path\*" or "path\*.ext"
+    // We need to find the last path separator and extract the directory
+    char dirpath[MAX_PATH];
+    int len = 0;
+    while (lpFileName[len] != '\0' && len < MAX_PATH - 1) {
+        dirpath[len] = lpFileName[len];
+        len++;
+    }
+    dirpath[len] = '\0';
+
+    // Find the last path separator (either '/' or '\')
+    int last_sep = -1;
+    for (int i = 0; i < len; i++) {
+        if (dirpath[i] == '/' || dirpath[i] == '\\')
+            last_sep = i;
+    }
+
+    // If we found a separator, truncate to get the directory path
+    // If the pattern is just "*", use "." as the directory
+    if (last_sep >= 0) {
+        dirpath[last_sep] = '\0';
+    } else {
+        // No separator found - use current directory
+        dirpath[0] = '.';
+        dirpath[1] = '\0';
+    }
+
+    // Open the directory
+    int ret = proc_open_dir(proc, dirpath);
+    if (ret < 0) {
+        switch (ret) {
+        case PROC_ERROR_FULL:
+            *proc_errno_ptr(proc) = ERROR_NOT_ENOUGH_MEMORY;
+            return INVALID_HANDLE_VALUE;
+        case PROC_ERROR_NOENT:
+            *proc_errno_ptr(proc) = ERROR_PATH_NOT_FOUND;
+            return INVALID_HANDLE_VALUE;
+        case PROC_ERROR_IO:
+        default:
+            *proc_errno_ptr(proc) = ERROR_ACCESS_DENIED;
+            return INVALID_HANDLE_VALUE;
+        }
+    }
+
+    // Allocate find handle structure
+    FindHandle *fh = rpmalloc(sizeof(FindHandle));
+    if (fh == NULL) {
+        proc_close(proc, ret, false);
+        *proc_errno_ptr(proc) = ERROR_NOT_ENOUGH_MEMORY;
+        return INVALID_HANDLE_VALUE;
+    }
+    fh->fd = ret;
+
+    // Read the first entry
+    DirEntry entry;
+    int read_ret = proc_read_dir(proc, fh->fd, &entry);
+    if (read_ret < 0) {
+        proc_close(proc, fh->fd, false);
+        rpfree(fh);
+        switch (read_ret) {
+        case PROC_ERROR_BADIDX:
+        case PROC_ERROR_BADARG:
+            *proc_errno_ptr(proc) = ERROR_INVALID_HANDLE;
+            return INVALID_HANDLE_VALUE;
+        default:
+            *proc_errno_ptr(proc) = ERROR_ACCESS_DENIED;
+            return INVALID_HANDLE_VALUE;
+        }
+    }
+
+    if (read_ret == 0) {
+        // Empty directory - no files found
+        proc_close(proc, fh->fd, false);
+        rpfree(fh);
+        *proc_errno_ptr(proc) = ERROR_FILE_NOT_FOUND;
+        return INVALID_HANDLE_VALUE;
+    }
+
+    // Populate the find data structure
+    populate_find_data(lpFindFileData, &entry);
+
+    *proc_errno_ptr(proc) = ERROR_SUCCESS;
+    return (HANDLE)fh;
 }
 
 BOOL mock_windows_FindNextFileA(HANDLE hFindFile, WIN32_FIND_DATAA *lpFindFileData)
 {
-    abortf("mock %s() not implemented yet\n", __func__); // TODO
+    Proc *proc = proc_current();
+    if (proc == NULL)
+        abortf("Call to %s() with no node scheduled\n", __func__);
+
+    ensure_os(proc, OS_WINDOWS, __func__);
+
+    if (hFindFile == INVALID_HANDLE_VALUE || hFindFile == NULL || lpFindFileData == NULL) {
+        *proc_errno_ptr(proc) = ERROR_INVALID_HANDLE;
+        return 0;  // FALSE
+    }
+
+    FindHandle *fh = (FindHandle *)hFindFile;
+
+    // Read the next entry
+    DirEntry entry;
+    int ret = proc_read_dir(proc, fh->fd, &entry);
+    if (ret < 0) {
+        switch (ret) {
+        case PROC_ERROR_BADIDX:
+        case PROC_ERROR_BADARG:
+            *proc_errno_ptr(proc) = ERROR_INVALID_HANDLE;
+            return 0;  // FALSE
+        default:
+            *proc_errno_ptr(proc) = ERROR_ACCESS_DENIED;
+            return 0;  // FALSE
+        }
+    }
+
+    if (ret == 0) {
+        // No more files
+        *proc_errno_ptr(proc) = ERROR_NO_MORE_FILES;
+        return 0;  // FALSE
+    }
+
+    // Populate the find data structure
+    populate_find_data(lpFindFileData, &entry);
+
+    *proc_errno_ptr(proc) = ERROR_SUCCESS;
+    return 1;  // TRUE
 }
 
 BOOL mock_windows_FindClose(HANDLE hFindFile)
 {
-    abortf("mock %s() not implemented yet\n", __func__); // TODO
+    Proc *proc = proc_current();
+    if (proc == NULL)
+        abortf("Call to %s() with no node scheduled\n", __func__);
+
+    ensure_os(proc, OS_WINDOWS, __func__);
+
+    if (hFindFile == INVALID_HANDLE_VALUE || hFindFile == NULL) {
+        *proc_errno_ptr(proc) = ERROR_INVALID_HANDLE;
+        return 0;  // FALSE
+    }
+
+    FindHandle *fh = (FindHandle *)hFindFile;
+
+    int ret = proc_close(proc, fh->fd, false);
+    if (ret < 0) {
+        rpfree(fh);
+        switch (ret) {
+        case PROC_ERROR_BADIDX:
+            *proc_errno_ptr(proc) = ERROR_INVALID_HANDLE;
+            return 0;  // FALSE
+        default:
+            *proc_errno_ptr(proc) = ERROR_ACCESS_DENIED;
+            return 0;  // FALSE
+        }
+    }
+
+    rpfree(fh);
+    *proc_errno_ptr(proc) = ERROR_SUCCESS;
+    return 1;  // TRUE
 }
 
 BOOL mock_windows_MoveFileExW(WCHAR *lpExistingFileName, WCHAR *lpNewFileName, DWORD dwFlags)

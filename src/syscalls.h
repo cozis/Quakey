@@ -213,7 +213,8 @@ typedef LPVOID  HANDLE;
 #define TRUNCATE_EXISTING 5
 
 // CreateFileW dwFlagsAndAttributes flags (common ones)
-#define FILE_ATTRIBUTE_NORMAL 0x00000080
+#define FILE_ATTRIBUTE_NORMAL    0x00000080
+#define FILE_ATTRIBUTE_DIRECTORY 0x00000010
 
 // SetFilePointer dwMoveMethod values
 #define FILE_BEGIN   0
@@ -234,6 +235,7 @@ typedef LPVOID  HANDLE;
 #define ERROR_ALREADY_EXISTS      183
 #define ERROR_FILE_EXISTS         80
 #define ERROR_NEGATIVE_SEEK       131
+#define ERROR_NO_MORE_FILES       18
 
 typedef struct _SECURITY_ATTRIBUTES {
     DWORD           nLength;
