@@ -1,9 +1,10 @@
+[X] Handle socket_queue_init failures
+[X] Convert various flags
+[X] Set the OS when spawning a process
 [ ] Make sure lfs is configured to be deterministic
 [ ] Randomly return EINTR
 [ ] Sometimes make send() and write() return 0
 [ ] Fix port byte order
-[ ] Handle socket_queue_init failures
-[ ] Convert various flags
+[ ] Implement process restart
 [ ] Instead of instantly restarting a process, keep it dead for a bit
 [ ] mock malloc, realloc, free
-[ ] Set the OS when spawning a process

@@ -1,1 +1,1 @@
-gcc main.c src/syscalls.c src/sim.c src/3p/lfs.c src/3p/lfs_util.c src/3p/rpmalloc.c -o main -Wall -Wextra -Iinclude
+gcc -o example src/libc.c src/lfs.c src/lfs_util.c src/malloc.c src/rpmalloc.c src/quakey.c example.c -Wall -Wextra -Iinclude -nostdlib

@@ -39,7 +39,7 @@ int main(void)
     if (quakey_init(&sim) < 0)
         return -1;
 
-    QuakeySpawnConfig config = {
+    QuakeySpawn config = {
         .state_size = 0,
         .init_func = example_proc_init,
         .tick_func = example_proc_tick,

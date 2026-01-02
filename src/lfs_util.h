@@ -44,6 +44,10 @@
 #include <string.h>
 #include <inttypes.h>
 
+#define LFS_NO_DEBUG
+#define LFS_NO_WARN
+#define LFS_NO_ERROR
+
 #ifndef LFS_NO_MALLOC
 #include "rpmalloc.h"
 #endif
