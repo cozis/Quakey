@@ -5,6 +5,7 @@
 #include <stdio.h>
 #endif
 
+#include "utils.h"
 #include "client.h"
 
 int client_init(void *state, int argc, char **argv,

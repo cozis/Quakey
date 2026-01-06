@@ -5,6 +5,7 @@
 #include <stdio.h>
 #endif
 
+#include "utils.h"
 #include "server.h"
 
 int server_init(void *state, int argc, char **argv,

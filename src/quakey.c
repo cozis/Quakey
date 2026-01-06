@@ -805,7 +805,7 @@ static void host_init(Host *host, Sim *sim, QuakeySpawn config, char *arg)
     }
 
     if (host->poll_timeout > -1)
-        time_event_wakeup(host->sim, host->sim->current_time + host->poll_timeout, host);
+        time_event_wakeup(host->sim, host->sim->current_time + host->poll_timeout * 1000000, host);
 }
 
 static void host_free(Host *host)
@@ -987,7 +987,7 @@ static void host_update(Host *host)
     }
 
     if (host->poll_timeout > -1)
-        time_event_wakeup(host->sim, host->sim->current_time + host->poll_timeout, host);
+        time_event_wakeup(host->sim, host->sim->current_time + host->poll_timeout * 1000000, host);
 }
 
 static bool host_has_addr(Host *host, Addr addr)
