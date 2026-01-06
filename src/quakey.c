@@ -2,7 +2,6 @@
 // Includes
 
 #include "lfs.h"
-#include "libc.h"
 #include "rpmalloc.h"
 #include <quakey.h>
 
@@ -367,6 +366,182 @@ static void time_event_send_data(Sim *sim, Nanos time, Desc *desc);
 /////////////////////////////////////////////////////////////////
 // Address Code
 
+static bool is_digit(char c)
+{
+    return c >= '0' && c <= '9';
+}
+
+static bool is_hex_digit(char c)
+{
+    return (c >= '0' && c <= '9')
+        || (c >= 'a' && c <= 'f')
+        || (c >= 'A' && c <= 'F');
+}
+
+static int parse_ipv4(char *src, int len, int *pcur, AddrIPv4 *ipv4)
+{
+    int cur = *pcur;
+
+	unsigned int out = 0;
+	int i = 0;
+	for (;;) {
+
+		if (cur == len || !is_digit(src[cur]))
+			return -1;
+
+		int b = 0;
+		do {
+			int x = src[cur++] - '0';
+			if (b > (UINT8_MAX - x) / 10)
+				return -1;
+			b = b * 10 + x;
+		} while (cur < len && is_digit(src[cur]));
+
+		out <<= 8;
+		out |= (unsigned char) b;
+
+		i++;
+		if (i == 4)
+			break;
+
+		if (cur == len || src[cur] != '.')
+			return -1;
+		cur++;
+	}
+
+	ipv4->data = out;
+
+	*pcur = cur;
+	return 0;
+}
+
+static int hex_digit_to_int(char c)
+{
+	if (c >= 'a' && c <= 'f') return c - 'a' + 10;
+	if (c >= 'A' && c <= 'F') return c - 'A' + 10;
+	if (c >= '0' && c <= '9') return c - '0';
+	return -1;
+}
+
+static int parse_ipv6_comp(char *src, int len, int *pcur)
+{
+    int cur = *pcur;
+
+	unsigned short buf;
+	if (cur == len || !is_hex_digit(src[cur]))
+		return -1;
+	buf = hex_digit_to_int(src[cur]);
+	cur++;
+
+	if (cur == len || !is_hex_digit(src[cur])) {
+	    *pcur = cur;
+		return buf;
+	}
+	buf <<= 4;
+	buf |= hex_digit_to_int(src[cur]);
+	cur++;
+
+	if (cur == len || !is_hex_digit(src[cur])) {
+	    *pcur = cur;
+		return buf;
+	}
+	buf <<= 4;
+	buf |= hex_digit_to_int(src[cur]);
+	cur++;
+
+	if (cur == len || !is_hex_digit(src[cur])) {
+	    *pcur = cur;
+		return buf;
+	}
+	buf <<= 4;
+	buf |= hex_digit_to_int(src[cur]);
+	cur++;
+
+	*pcur = cur;
+	return (int) buf;
+}
+
+static int parse_ipv6(char *src, int len, int *pcur, AddrIPv6 *ipv6)
+{
+    int cur = *pcur;
+
+	unsigned short head[8];
+	unsigned short tail[8];
+	int head_len = 0;
+	int tail_len = 0;
+
+	if (len - cur > 1
+		&& src[cur+0] == ':'
+		&& src[cur+1] == ':')
+		cur += 2;
+	else {
+
+		for (;;) {
+
+			int ret = parse_ipv6_comp(src, len, &cur);
+			if (ret < 0) return ret;
+
+			head[head_len++] = (unsigned short) ret;
+			if (head_len == 8) break;
+
+			if (cur == len || src[cur] != ':')
+				return -1;
+			cur++;
+
+			if (cur < len && src[cur] == ':') {
+				cur++;
+				break;
+			}
+		}
+	}
+
+	if (head_len < 8) {
+		while (cur < len && is_hex_digit(src[cur])) {
+
+			int ret = parse_ipv6_comp(src, len, &cur);
+			if (ret < 0) return ret;
+
+			tail[tail_len++] = (unsigned short) ret;
+			if (head_len + tail_len == 8) break;
+
+			if (cur == len || src[cur] != ':')
+				break;
+			cur++;
+		}
+	}
+
+	for (int i = 0; i < head_len; i++)
+		ipv6->data[i] = head[i];
+
+	for (int i = 0; i < 8 - head_len - tail_len; i++)
+		ipv6->data[head_len + i] = 0;
+
+	for (int i = 0; i < tail_len; i++)
+		ipv6->data[8 - tail_len + i] = tail[i];
+
+	*pcur = cur;
+	return 0;
+}
+
+static int addr_parse(char *src, Addr *dst)
+{
+    int cur = 0;
+    int len = strlen(src);
+
+    if (parse_ipv4(src, len, &cur, &dst->ipv4) == 0) {
+        dst->family = ADDR_FAMILY_IPV4;
+        return 0;
+    }
+
+    cur = 0;
+    if (parse_ipv6(src, len, &cur, &dst->ipv6) == 0) {
+        dst->family = ADDR_FAMILY_IPV6;
+        return 0;
+    }
+
+    return -1;
+}
+
 static bool addr_eql(Addr a1, Addr a2)
 {
     if (a1.family != a2.family)
@@ -375,6 +550,25 @@ static bool addr_eql(Addr a1, Addr a2)
         return !memcmp(&a1.ipv4, &a2.ipv4, sizeof(AddrIPv4));
     ASSERT(a1.family == ADDR_FAMILY_IPV6);
     return !memcmp(&a1.ipv6, &a2.ipv6, sizeof(AddrIPv6));
+}
+
+static bool is_zero_addr(Addr addr)
+{
+    char *p;
+    int   n;
+    if (addr.family == ADDR_FAMILY_IPV4) {
+        p = (char*) &addr.ipv4;
+        n = sizeof(addr.ipv4);
+    } else {
+        ASSERT(addr.family == ADDR_FAMILY_IPV6);
+        p = (char*) &addr.ipv6;
+        n = sizeof(addr.ipv6);
+    }
+    for (int i = 0; i < n; i++) {
+        if (p[i] != 0)
+            return false;
+    }
+    return true;
 }
 
 /////////////////////////////////////////////////////////////////
@@ -465,15 +659,20 @@ static int socket_queue_write(SocketQueue *queue, char *src, int len)
 
 static int socket_queue_move(SocketQueue *dst_queue, SocketQueue *src_queue, int max)
 {
-    int avail;
-    char *src = socket_queue_read_buf(src_queue, &avail);
-    if (avail > max)
-        avail = max;
-    char *dst = socket_queue_write_buf(dst_queue, &avail);
-    memcpy(dst, src, avail);
-    socket_queue_write_ack(dst_queue, avail);
-    socket_queue_read_ack(src_queue, avail);
-    return avail;
+    int srclen;
+    char *src = socket_queue_read_buf(src_queue, &srclen);
+
+    if (srclen > max)
+        srclen = max;
+
+    int dstlen = srclen;
+    char *dst = socket_queue_write_buf(dst_queue, &dstlen);
+
+    memcpy(dst, src, dstlen);
+
+    socket_queue_write_ack(dst_queue, dstlen);
+    socket_queue_read_ack(src_queue, dstlen);
+    return dstlen;
 }
 
 static b32 socket_queue_full(SocketQueue *queue)
@@ -730,6 +929,16 @@ static void host_init(Host *host, Sim *sim, QuakeySpawn config, char *arg)
         TODO;
     }
 
+    if (config.num_addrs > HOST_ADDR_LIMIT) {
+        TODO;
+    }
+    for (int i = 0; i < config.num_addrs; i++) {
+        if (addr_parse(config.addrs[i], &host->addrs[i]) < 0) {
+            TODO;
+        }
+    }
+    host->num_addrs = config.num_addrs;
+
     host->state_size = config.state_size;
     host->state = malloc(config.state_size);
     if (host->state == NULL) {
@@ -741,8 +950,10 @@ static void host_init(Host *host, Sim *sim, QuakeySpawn config, char *arg)
     host->free_func = config.free_func;
 
     host->num_desc = 0;
-    for (int i = 0; i < HOST_DESC_LIMIT; i++)
+    for (int i = 0; i < HOST_DESC_LIMIT; i++) {
+        host->desc[i].host = host;
         host->desc[i].type = DESC_EMPTY;
+    }
 
     host->errno_ = 0;
 
@@ -881,6 +1092,9 @@ static bool host_ready(Host *host)
             }
             break;
         case DESC_SOCKET_C:
+            if (desc->connect_status == CONNECT_STATUS_NOHOST ||
+                desc->connect_status == CONNECT_STATUS_RESET)
+                return true;
             if (events & POLLIN) {
                 if (!socket_queue_empty(desc->input)
                     || desc->connect_status == CONNECT_STATUS_RESET
@@ -931,11 +1145,12 @@ static void set_revents_in_poll_array(Host *host)
             }
             break;
         case DESC_SOCKET_C:
+            if (desc->connect_status == CONNECT_STATUS_NOHOST ||
+                desc->connect_status == CONNECT_STATUS_RESET)
+                revents |= POLLERR;
             if (events & POLLIN) {
                 // TODO: should report prover events when hup and rst are set
-                if (!socket_queue_empty(desc->input)
-                    || desc->connect_status == CONNECT_STATUS_RESET
-                    || desc->connect_status == CONNECT_STATUS_CLOSE)
+                if (!socket_queue_empty(desc->input) || desc->connect_status == CONNECT_STATUS_CLOSE)
                     revents |= POLLIN;
             }
             if (events & POLLOUT) {
@@ -1017,11 +1232,16 @@ static bool is_bound(Desc *desc)
 // descriptors too
 static bool is_bound_to(Desc *desc, Addr addr, uint16_t port)
 {
-    if (is_bound(desc)) {
-        if (!memcmp(&addr, &desc->bound_addr, sizeof(Addr)) && port == desc->bound_port)
-            return true;
-    }
-    return false;
+    if (!is_bound(desc))
+        return false;
+
+    if (!is_zero_addr(desc->bound_addr) && !addr_eql(addr, desc->bound_addr))
+        return false;
+
+    if (port != desc->bound_port)
+        return false;
+
+    return true;
 }
 
 static Desc *host_find_desc_bound_to(Host *host, Addr addr, uint16_t port)
@@ -1102,6 +1322,7 @@ static int host_close(Host *host, int desc_idx, bool expect_socket)
     }
 
     desc_free(&host->desc[desc_idx], &host->lfs, false);
+    time_event_disconnect(host->sim, 10000000, &host->desc[desc_idx], false);
 
     host->num_desc--;
     return 0;
@@ -1115,25 +1336,6 @@ static bool interf_exists_locally(Host *host, Addr addr)
     return false;
 }
 
-static bool is_zero_addr(Addr addr)
-{
-    char *p;
-    int   n;
-    if (addr.family == ADDR_FAMILY_IPV4) {
-        p = (char*) &addr.ipv4;
-        n = sizeof(addr.ipv4);
-    } else {
-        ASSERT(addr.family == ADDR_FAMILY_IPV6);
-        p = (char*) &addr.ipv6;
-        n = sizeof(addr.ipv6);
-    }
-    for (int i = 0; i < n; i++) {
-        if (p[i] != 0)
-            return false;
-    }
-    return true;
-}
-
 static bool addr_in_use(Host *host, Addr addr, uint16_t port)
 {
     ASSERT(port != 0);
@@ -1142,8 +1344,10 @@ static bool addr_in_use(Host *host, Addr addr, uint16_t port)
         // Any address may conflict with the zero address,
         // which means we only need to compare ports.
         for (int i = 0; i < HOST_DESC_LIMIT; i++) {
-            if (host->desc[i].bound_port == port)
-                return true;
+            if (is_socket(&host->desc[i])) {
+                if (host->desc[i].bound_port == port)
+                    return true;
+            }
         }
     } else {
         for (int i = 0; i < HOST_DESC_LIMIT; i++) {
@@ -1200,8 +1404,10 @@ static int host_bind(Host *host, int desc_idx, Addr addr, uint16_t port)
     if (addr.family != desc->bound_addr.family)
         return HOST_ERROR_BADFAM;
 
-    if (!interf_exists_locally(host, addr))
-        return HOST_ERROR_NOTAVAIL;
+    if (!is_zero_addr(addr)) {
+        if (!interf_exists_locally(host, addr))
+            return HOST_ERROR_NOTAVAIL;
+    }
 
     /////////////////////////////////////////////////////////
     // Check port
@@ -1337,6 +1543,8 @@ static int host_connect(Host *host, int desc_idx,
 
     // TODO: some percent of times connect() should resolve immediately
 
+    time_event_connect(host->sim, 100000000, desc);
+
     desc->connect_addr = addr;
     desc->connect_port = port;
     desc->connect_status = CONNECT_STATUS_WAIT;
@@ -1438,7 +1646,6 @@ static int host_read_dir(Host *host, int desc_idx, DirEntry *entry)
     return 1;
 }
 
-
 static int recv_inner(Desc *desc, char *dst, int len)
 {
     // TODO: check that the descriptor is non-blocking
@@ -1474,6 +1681,7 @@ static int send_inner(Desc *desc, char *src, int len)
     if (ret == 0)
         return HOST_ERROR_WOULDBLOCK;
 
+    time_event_send_data(desc->host->sim, 10000000, desc);
     return ret;
 }
 
@@ -1847,6 +2055,7 @@ static b32 time_event_process(TimeEvent *event, Sim *sim)
                 break;
             }
 
+            src_desc->connect_status = CONNECT_STATUS_DONE;
             src_desc->peer = peer; // Resolved!
         }
         break;
@@ -1971,12 +2180,13 @@ static void process_events_at_current_time(Sim *sim)
     }
 
     if (deferred_disconnect) {
-        for (int i = 0; i < sim->num_events; i++)
-            if (sim->events[i].time == sim->current_time)
+        for (int i = 0; i < sim->num_events; i++) {
+                if (sim->events[i].time == sim->current_time)
                 if (sim->events[i].type == EVENT_TYPE_DISCONNECT) {
                     if (time_event_process(&sim->events[i], sim))
                         sim->events[i--] = sim->events[--sim->num_events];
                 }
+        }
     }
 }
 
@@ -2006,6 +2216,9 @@ static b32 sim_update(Sim *sim)
         host_idx = find_ready_host(sim);
         if (host_idx > -1)
             break;
+
+        if (sim->num_events == 0)
+            __builtin_trap(); // TODO: remove me
 
         advance_time_to_next_event(sim);
         process_events_at_current_time(sim);
@@ -2197,7 +2410,7 @@ static int convert_addr(void *addr, size_t addr_len,
             struct sockaddr_in *p = addr;
             converted_addr->family = ADDR_FAMILY_IPV4;
             converted_addr->ipv4   = *(AddrIPv4*) &p->sin_addr;
-            *converted_port        = p->sin_port;
+            *converted_port        = ntohs(p->sin_port);
         }
         break;
     case AF_INET6:
@@ -2207,7 +2420,7 @@ static int convert_addr(void *addr, size_t addr_len,
             struct sockaddr_in6 *p = addr;
             converted_addr->family = ADDR_FAMILY_IPV6;
             converted_addr->ipv6   = *(AddrIPv6*) &p->sin6_addr;
-            *converted_port        = p->sin6_port;
+            *converted_port        = ntohs(p->sin6_port);
         }
         break;
     default:
@@ -2594,27 +2807,35 @@ int mock_getsockopt(int fd, int level, int optname, void *optval, socklen_t *opt
     if (ret < 0) {
         TODO;
     }
+
+    int out;
     switch (status) {
     case CONNECT_STATUS_WAIT:
-    TODO;
+        out = NO_ERROR;
         break;
     case CONNECT_STATUS_DONE:
-    TODO;
+        out = NO_ERROR;
         break;
     case CONNECT_STATUS_RESET:
-    TODO;
+        out = ECONNRESET;
         break;
     case CONNECT_STATUS_CLOSE:
-    TODO;
+        out = ECONNRESET;
         break;
     case CONNECT_STATUS_NOHOST:
-    TODO;
+        out = ETIMEDOUT;
         break;
     default:
-    TODO;
+        UNREACHABLE;
         break;
     }
 
+    if (*optlen < sizeof(out))
+        memcpy(optval, &out, *optlen);
+    else {
+        memcpy(optval, &out, sizeof(out));
+        *optlen = sizeof(out);
+    }
     return 0;
 }
 
@@ -4039,4 +4260,46 @@ BOOL mock_MoveFileExW(WCHAR *lpExistingFileName, WCHAR *lpNewFileName, DWORD dwF
 
     *host_errno_ptr(host) = ERROR_SUCCESS;
     return 1;  // TRUE
+}
+
+unsigned short htons(unsigned short hostshort)
+{
+    // On big-endian systems return the short as-is,
+    // else it swaps the bytes
+    return ((hostshort & 0xFF00) >> 8)
+         | ((hostshort & 0x00FF) << 8);
+}
+
+unsigned short ntohs(unsigned short netshort)
+{
+    return htons(netshort);
+}
+
+int mock_inet_pton(int af, const char *restrict src, void *restrict dst)
+{
+    Host *host = host___;
+    if (host == NULL)
+        abort_("Call to mock_inet_pton() with no node scheduled\n");
+
+    Addr tmp;
+    int ret = addr_parse((char*) src, &tmp);
+    if (ret < 0)
+        return 0;
+    switch (af) {
+    case AF_INET:
+        if (tmp.family != ADDR_FAMILY_IPV4)
+            return 0;
+        memcpy(dst, &tmp.ipv4, sizeof(AddrIPv4));
+        break;
+    case AF_INET6:
+        if (tmp.family != ADDR_FAMILY_IPV6)
+            return 0;
+        memcpy(dst, &tmp.ipv6, sizeof(AddrIPv6));
+        break;
+    default:
+        *host_errno_ptr(host) = EAFNOSUPPORT;
+        return -1;
+    }
+
+    return 1;
 }

@@ -10,8 +10,9 @@ struct pollfd {
 };
 
 enum {
-    POLLIN = 1,
-    POLLOUT = 2,
+    POLLIN  = 1<<0,
+    POLLOUT = 1<<1,
+    POLLERR = 1<<2,
 };
 
 // Function pointers to a simulated program's code
@@ -73,6 +74,7 @@ enum {
     EISCONN,
     ECONNRESET,
     EAGAIN,
+    EWOULDBLOCK = EAGAIN,
     EPIPE,
     EMFILE,
     EAFNOSUPPORT,
@@ -84,6 +86,7 @@ enum {
     EEXIST,
     ENOMEM,
     ERANGE,
+    ETIMEDOUT,
 };
 
 typedef int            BOOL;
@@ -165,11 +168,24 @@ struct sockaddr_in6 {
 	unsigned int    sin6_scope_id;
 };
 
+#define INADDR_ANY 0
+
+unsigned short htons(unsigned short hostshort);
+unsigned short ntohs(unsigned short netshort);
+int mock_inet_pton(int af, const char *restrict src, void *restrict dst);
 int mock_bind(int fd, void *addr, unsigned long addr_len);
 
 ////////////////////////////////////////////////////////
 
 typedef unsigned socklen_t;
+
+enum {
+    SO_ERROR,
+};
+
+enum {
+    SOL_SOCKET,
+};
 
 int mock_connect(int fd, void *addr, unsigned long addr_len);
 int mock_getsockopt(int fd, int level, int optname, void *optval, socklen_t *optlen);
@@ -449,6 +465,7 @@ BOOL   mock_FindClose(HANDLE hFindFile);
 #define socket           mock_socket
 #define closesocket      mock_closesocket
 #define ioctlsocket      mock_ioctlsocket
+#define inet_pton        mock_inet_pton
 #define bind             mock_bind
 #define connect          mock_connect
 #define getsockopt       mock_getsockopt
