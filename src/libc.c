@@ -1,5 +1,76 @@
 #include "libc.h"
 
+#define STB_SPRINTF_IMPLEMENTATION
+#include "stb_sprintf.h"
+
+#ifdef _WIN32
+int WriteFile(void *handle,
+    char *src,
+    unsigned long len,
+    unsigned long *num,
+    void *ov);
+void *GetStdHandle(unsigned long nStdHandle);
+#endif
+
+int printf(const char *restrict fmt, ...)
+{
+    long ret;
+    char buf[1<<10];
+    va_list args;
+    va_start(args, fmt);
+    ret = stbsp_vsnprintf(buf, sizeof(buf), fmt, args);
+    va_end(args);
+
+#ifdef _WIN32
+    WriteFile(GetStdHandle((unsigned long) -11), buf, ret, NULL, NULL);
+#else
+    __asm__ volatile (
+        "syscall"
+        : "=a" (ret)
+        : "a" (1),
+            "D" (1),
+            "S" (args),
+            "d" (ret)
+        : "rcx", "r11", "memory"
+    );
+    (void) ret;
+#endif
+
+    return ret;
+}
+
+int puts(const char *s)
+{
+    long ret;
+    size_t len = strlen(s);
+
+#ifdef _WIN32
+    WriteFile(GetStdHandle((unsigned long) -11), (char *)s, len, NULL, NULL);
+    WriteFile(GetStdHandle((unsigned long) -11), "\n", 1, NULL, NULL);
+#else
+    __asm__ volatile (
+        "syscall"
+        : "=a" (ret)
+        : "a" (1),
+            "D" (1),
+            "S" (s),
+            "d" (len)
+        : "rcx", "r11", "memory"
+    );
+    __asm__ volatile (
+        "syscall"
+        : "=a" (ret)
+        : "a" (1),
+            "D" (1),
+            "S" ("\n"),
+            "d" (1)
+        : "rcx", "r11", "memory"
+    );
+#endif
+
+    return (int)len + 1;
+}
+
 void *memcpy(void *restrict dest, const void *restrict src, size_t n)
 {
     unsigned char *d = dest;

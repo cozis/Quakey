@@ -2,6 +2,8 @@
 // Includes
 
 #include "lfs.h"
+#include "libc.h"
+#include "rpmalloc.h"
 #include <quakey.h>
 
 /////////////////////////////////////////////////////////////////
@@ -773,6 +775,9 @@ static void host_init(Host *host, Sim *sim, QuakeySpawn config, char *arg)
             TODO;
         }
     }
+
+    host->poll_count = 0;
+    host->poll_timeout = -1;
 
     host___ = host;
     ret = config.init_func(

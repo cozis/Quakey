@@ -56,7 +56,7 @@ void quakey_free(Quakey *quakey);
 void quakey_spawn(Quakey *quakey, QuakeySpawn config, char *arg);
 
 // Schedule and executes one program until it would block, then returns
-int quakey_schedule_one(Quakey *sim);
+int quakey_schedule_one(Quakey *quakey);
 
 ////////////////////////////////////////////////////////
 
@@ -492,5 +492,9 @@ BOOL   mock_FindClose(HANDLE hFindFile);
 #define FindNextFileA    mock_FindNextFileA
 #define FindClose        mock_FindClose
 #endif
+
+// Useful for debugging
+int printf(const char *restrict fmt, ...);
+int puts(const char *s);
 
 #endif // QUAKEY_INCLUDED
