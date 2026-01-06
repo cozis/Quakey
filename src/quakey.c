@@ -268,6 +268,8 @@ struct Host {
     int           poll_count;
     int           poll_timeout;
 
+    b32 timedout;
+
     // Current error number set by system call mocks
     int errno_;
 
@@ -352,6 +354,11 @@ struct Sim {
     int max_events;
     TimeEvent *events;
 };
+
+static void time_event_wakeup(Sim *sim, Nanos time, Host *host);
+static void time_event_connect(Sim *sim, Nanos time, Desc *desc);
+static void time_event_disconnect(Sim *sim, Nanos time, Desc *desc, b32 rst);
+static void time_event_send_data(Sim *sim, Nanos time, Desc *desc);
 
 /////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////
@@ -776,6 +783,7 @@ static void host_init(Host *host, Sim *sim, QuakeySpawn config, char *arg)
         }
     }
 
+    host->timedout = false;
     host->poll_count = 0;
     host->poll_timeout = -1;
 
@@ -795,6 +803,9 @@ static void host_init(Host *host, Sim *sim, QuakeySpawn config, char *arg)
         //       running without it
         TODO;
     }
+
+    if (host->poll_timeout > -1)
+        time_event_wakeup(host->sim, host->sim->current_time + host->poll_timeout, host);
 }
 
 static void host_free(Host *host)
@@ -848,8 +859,7 @@ static bool is_desc_idx_valid(Host *host, int desc_idx);
 
 static bool host_ready(Host *host)
 {
-    // If poll timeout is 0, always ready
-    if (host->poll_timeout == 0)
+    if (host->timedout)
         return true;
 
     // Check if any polled descriptors have pending events
@@ -961,6 +971,7 @@ static void set_revents_in_poll_array(Host *host)
 
 static void host_update(Host *host)
 {
+    host->timedout = false;
     set_revents_in_poll_array(host);
     host___ = host;
     int ret = host->tick_func(
@@ -974,6 +985,9 @@ static void host_update(Host *host)
     if (ret < 0) {
         TODO;
     }
+
+    if (host->poll_timeout > -1)
+        time_event_wakeup(host->sim, host->sim->current_time + host->poll_timeout, host);
 }
 
 static bool host_has_addr(Host *host, Addr addr)
@@ -1867,7 +1881,7 @@ static b32 time_event_process(TimeEvent *event, Sim *sim)
         }
         break;
     case EVENT_TYPE_WAKEUP:
-        TODO;
+        event->host->timedout = true;
         break;
     }
     return consumed;
