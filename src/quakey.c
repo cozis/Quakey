@@ -1998,6 +1998,8 @@ static b32 sim_update(Sim *sim)
 /////////////////////////////////////////////////////////////////
 // Entry Point
 
+int main(void);
+
 void _start(void)
 {
     int ret = main();

@@ -1,28 +1,210 @@
 #include "libc.h"
 
-int memcmp(const void *p1, const void *p2, size_t n)
+void *memcpy(void *restrict dest, const void *restrict src, size_t n)
 {
-    return __builtin_memcmp(p1, p2, n);
+    unsigned char *d = dest;
+    const unsigned char *s = src;
+
+    /* Word-at-a-time copy when aligned */
+    if (((unsigned long)d | (unsigned long)s) % sizeof(unsigned long) == 0) {
+        while (n >= sizeof(unsigned long)) {
+            *(unsigned long *)d = *(const unsigned long *)s;
+            d += sizeof(unsigned long);
+            s += sizeof(unsigned long);
+            n -= sizeof(unsigned long);
+        }
+    }
+
+    /* Byte-by-byte for remainder or unaligned */
+    while (n--)
+        *d++ = *s++;
+
+    return dest;
 }
 
-void *memcpy(void *p1, const void *p2, size_t n)
+void *memmove(void *dest, const void *src, size_t n)
 {
-    return __builtin_memcpy(p1, p2, n);
+    unsigned char *d = dest;
+    const unsigned char *s = src;
+
+    if (d == s || n == 0)
+        return dest;
+
+    /* Non-overlapping or dest < src: forward copy */
+    if (d < s || d >= s + n) {
+        while (n--)
+            *d++ = *s++;
+    } else {
+        /* Overlapping with dest > src: backward copy */
+        d += n;
+        s += n;
+        while (n--)
+            *--d = *--s;
+    }
+
+    return dest;
 }
 
-void *memmove(void *p1, const void *p2, size_t n)
+void *memset(void *s, int c, size_t n)
 {
-    return __builtin_memmove(p1, p2, n);
+    unsigned char *p = s;
+    unsigned char val = (unsigned char)c;
+
+    /* Word-at-a-time when aligned */
+    if ((unsigned long)p % sizeof(unsigned long) == 0 && n >= sizeof(unsigned long)) {
+        unsigned long word = val;
+        word |= word << 8;
+        word |= word << 16;
+        if (sizeof(unsigned long) > 4)
+            word |= word << 32;
+        while (n >= sizeof(unsigned long)) {
+            *(unsigned long *)p = word;
+            p += sizeof(unsigned long);
+            n -= sizeof(unsigned long);
+        }
+    }
+
+    /* Byte-by-byte for remainder or unaligned */
+    while (n--)
+        *p++ = val;
+
+    return s;
 }
 
-void *memset(void *p, int ch, size_t n)
+int memcmp(const void *s1, const void *s2, size_t n)
 {
-    return __builtin_memset(p, ch, n);
+    const unsigned char *p1 = s1;
+    const unsigned char *p2 = s2;
+
+    while (n--) {
+        if (*p1 != *p2)
+            return *p1 - *p2;
+        p1++;
+        p2++;
+    }
+
+    return 0;
 }
 
 size_t strlen(const char *s)
 {
-    return __builtin_strlen(s);
+    const char *p = s;
+    while (*p)
+        p++;
+    return p - s;
+}
+
+size_t strnlen(const char *s, size_t maxlen)
+{
+    const char *p = s;
+    while (maxlen-- && *p)
+        p++;
+    return p - s;
+}
+
+char *strcpy(char *restrict dest, const char *restrict src)
+{
+    char *ret = dest;
+    while ((*dest++ = *src++))
+        ;
+    return ret;
+}
+
+char *strncpy(char *restrict dest, const char *restrict src, size_t n)
+{
+    char *ret = dest;
+
+    while (n && (*dest++ = *src++))
+        n--;
+
+    /* Pad with zeros if src was shorter */
+    while (n--)
+        *dest++ = '\0';
+
+    return ret;
+}
+
+int strcmp(const char *s1, const char *s2)
+{
+    while (*s1 && *s1 == *s2) {
+        s1++;
+        s2++;
+    }
+    return *(unsigned char *)s1 - *(unsigned char *)s2;
+}
+
+int strncmp(const char *s1, const char *s2, size_t n)
+{
+    if (n == 0)
+        return 0;
+
+    while (--n && *s1 && *s1 == *s2) {
+        s1++;
+        s2++;
+    }
+    return *(unsigned char *)s1 - *(unsigned char *)s2;
+}
+
+char *strchr(const char *s, int c)
+{
+    while (*s) {
+        if (*s == (char)c)
+            return (char *)s;
+        s++;
+    }
+    return (c == '\0') ? (char *)s : NULL;
+}
+
+char *strrchr(const char *s, int c)
+{
+    const char *last = NULL;
+
+    while (*s) {
+        if (*s == (char)c)
+            last = s;
+        s++;
+    }
+    return (c == '\0') ? (char *)s : (char *)last;
+}
+
+void *memchr(const void *s, int c, size_t n)
+{
+    const unsigned char *p = s;
+    unsigned char val = (unsigned char)c;
+
+    while (n--) {
+        if (*p == val)
+            return (void *)p;
+        p++;
+    }
+    return NULL;
+}
+
+char *strcat(char *restrict dest, const char *restrict src)
+{
+    char *ret = dest;
+
+    while (*dest)
+        dest++;
+
+    while ((*dest++ = *src++))
+        ;
+
+    return ret;
+}
+
+char *strncat(char *restrict dest, const char *restrict src, size_t n)
+{
+    char *ret = dest;
+
+    while (*dest)
+        dest++;
+
+    while (n-- && *src)
+        *dest++ = *src++;
+
+    *dest = '\0';
+    return ret;
 }
 
 void __assert_fail(const char *assertion,
@@ -66,17 +248,6 @@ size_t strspn(const char *s, const char *accept)
         count++;
     }
     return count;
-}
-
-// TODO: test this
-char *strchr(const char *s, int c)
-{
-    while (*s) {
-        if (*s == (char)c)
-            return (char *)s;
-        s++;
-    }
-    return (c == '\0') ? (char *)s : NULL;
 }
 
 // TODO: test this

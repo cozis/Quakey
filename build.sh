@@ -1,1 +1,1 @@
-gcc -o example src/libc.c src/lfs.c src/lfs_util.c src/malloc.c src/rpmalloc.c src/quakey.c example.c -Wall -Wextra -Iinclude -nostdlib
+gcc -o example src/libc.c src/lfs.c src/lfs_util.c src/malloc.c src/rpmalloc.c src/quakey.c example.c -Wall -Wextra -Iinclude -nostdlib -ggdb
