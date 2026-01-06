@@ -238,6 +238,8 @@ __attribute__ ((section("__DATA, __interpose"))) = {
 
 // Alias the C++ operators using the mangled names (https://itanium-cxx-abi.github.io/cxx-abi/abi.html#mangling)
 
+#ifdef __cplusplus
+
 // operators delete and delete[]
 void _ZdlPv(void* p) RPALIAS(rpfree)
 void _ZdaPv(void* p) RPALIAS(rpfree)
@@ -282,6 +284,9 @@ void _ZdlPvjSt11align_val_t(void* p, size_t n, size_t a) RPALIAS(rpfree_size_ali
 void _ZdaPvjSt11align_val_t(void* p, size_t n, size_t a) RPALIAS(rpfree_size_aligned)
 #endif
 
+#endif
+// end __cplusplus
+//
 void* malloc(size_t size) RPALIAS(rpmalloc)
 void* calloc(size_t count, size_t size) RPALIAS(rpcalloc)
 void* realloc(void* ptr, size_t size) RPALIAS(rprealloc)
