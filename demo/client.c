@@ -20,7 +20,7 @@ int client_init(void *state, int argc, char **argv,
 int client_tick(void *state, struct pollfd *pdata,
     int pcap, int *pnum, int *timeout)
 {
-    printf("tick client\n");
+    printf("tick client (%d ms)\n", (int) (get_current_time() / 1000000));
     *pnum = 0;
     *timeout = 1000;
     return 0;
