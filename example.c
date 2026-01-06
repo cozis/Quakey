@@ -8,10 +8,9 @@ static int example_proc_init(void *state, int argc, char **argv,
     (void) argv;
     (void) pdata;
     (void) pcap;
-    (void) pnum;
-    (void) timeout;
-    // TODO
-    return -1;
+    *pnum = 0;
+    *timeout = 1000;
+    return 0;
 }
 
 static int example_proc_tick(void *state, struct pollfd *pdata,
@@ -20,17 +19,15 @@ static int example_proc_tick(void *state, struct pollfd *pdata,
     (void) state;
     (void) pdata;
     (void) pcap;
-    (void) pnum;
-    (void) timeout;
-    // TODO
-    return -1;
+    *pnum = 0;
+    *timeout = 1000;
+    return 0;
 }
 
 static int example_proc_free(void *state)
 {
     (void) state;
-    // TODO
-    return -1;
+    return 0;
 }
 
 int main(void)

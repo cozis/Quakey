@@ -787,6 +787,8 @@ static void host_init(Host *host, Sim *sim, QuakeySpawn config, char *arg)
     );
     host___ = NULL;
     if (ret < 0) {
+        // TODO: if the node fails to initialize the simulation should continue
+        //       running without it
         TODO;
     }
 }
@@ -2002,7 +2004,11 @@ int main(void);
 
 void _start(void)
 {
+    rpmalloc_thread_initialize();
+
     int ret = main();
+
+    rpmalloc_thread_finalize();
 
     // exit syscall
     __asm__ volatile (
