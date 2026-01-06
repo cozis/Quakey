@@ -45,4 +45,8 @@ char *fgets(char *s, int n, void *stream);
 char *strstr(const char *h, const char *n);
 long strtol(const char *s, char **end, int base);
 
+// These are implemented by malloc.c, not libc.c
+void *malloc(size_t size);
+void free(void *p);
+
 #endif // LIBC_INCLUDED

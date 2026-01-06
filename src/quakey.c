@@ -2,7 +2,6 @@
 // Includes
 
 #include "lfs.h"
-#include "rpmalloc.h"
 #include <quakey.h>
 
 /////////////////////////////////////////////////////////////////
@@ -374,7 +373,7 @@ static bool addr_eql(Addr a1, Addr a2)
 
 static SocketQueue *socket_queue_init(int size)
 {
-    void *mem = rpmalloc(sizeof(SocketQueue) + size);
+    void *mem = malloc(sizeof(SocketQueue) + size);
     if (mem == NULL) {
         TODO;
     }
@@ -398,7 +397,7 @@ static void socket_queue_unref(SocketQueue *queue)
     ASSERT(queue->refs > 0);
     queue->refs--;
     if (queue->refs == 0)
-        rpfree(queue);
+        free(queue);
 }
 
 static char *socket_queue_read_buf(SocketQueue *queue, int *num)
@@ -488,7 +487,7 @@ static b32 socket_queue_used(SocketQueue *queue)
 
 static int accept_queue_init(AcceptQueue *queue, int capacity)
 {
-    Desc **entries = rpmalloc(capacity * sizeof(Desc*));
+    Desc **entries = malloc(capacity * sizeof(Desc*));
     if (entries == NULL)
         return -1;
     queue->head = 0;
@@ -500,7 +499,7 @@ static int accept_queue_init(AcceptQueue *queue, int capacity)
 
 static void accept_queue_free(AcceptQueue *queue)
 {
-    rpfree(queue->entries);
+    free(queue->entries);
 }
 
 static Desc **accept_queue_peek(AcceptQueue *queue, int idx)
@@ -711,7 +710,7 @@ static void host_init(Host *host, Sim *sim, QuakeySpawn config, char *arg)
     host->next_ephemeral_port = FIRST_EPHEMERAL_PORT;
 
     int arg_len = strlen(arg);
-    host->arg = rpmalloc(arg_len+1);
+    host->arg = malloc(arg_len+1);
     if (host->arg == NULL) {
         TODO;
     }
@@ -723,7 +722,7 @@ static void host_init(Host *host, Sim *sim, QuakeySpawn config, char *arg)
     }
 
     host->state_size = config.state_size;
-    host->state = rpmalloc(config.state_size);
+    host->state = malloc(config.state_size);
     if (host->state == NULL) {
         TODO;
     }
@@ -739,7 +738,7 @@ static void host_init(Host *host, Sim *sim, QuakeySpawn config, char *arg)
     host->errno_ = 0;
 
     host->disk_size = config.disk_size;
-    host->disk_data = rpmalloc(config.disk_size);
+    host->disk_data = malloc(config.disk_size);
     if (host->disk_data == NULL) {
         TODO;
     }
@@ -803,15 +802,15 @@ static void host_free(Host *host)
     }
 
     lfs_unmount(&host->lfs);
-    rpfree(host->disk_data);
+    free(host->disk_data);
 
     for (int i = 0; i < HOST_DESC_LIMIT; i++) {
         if (host->desc[i].type != DESC_EMPTY)
             desc_free(&host->desc[i], &host->lfs, true);
     }
 
-    rpfree(host->state);
-    rpfree(host->arg);
+    free(host->state);
+    free(host->arg);
 }
 
 static b32 host_is_linux(Host *host)
@@ -1703,7 +1702,7 @@ static void append_event(Sim *sim, TimeEvent event)
         int n = 2 * sim->max_events;
         if (n == 0)
             n = 8;
-        TimeEvent *p = rprealloc(sim->events, n * sizeof(TimeEvent));
+        TimeEvent *p = realloc(sim->events, n * sizeof(TimeEvent));
         if (p == NULL) {
             TODO;
         }
@@ -1887,11 +1886,11 @@ static void sim_free(Sim *sim)
 {
     for (int i = 0; i < sim->num_hosts; i++)
         host_free(sim->hosts[i]);
-    rpfree(sim->hosts);
+    free(sim->hosts);
 
     for (int i = 0; i < sim->num_events; i++)
         time_event_free(&sim->events[i]);
-    rpfree(sim->events);
+    free(sim->events);
 }
 
 static void sim_spawn(Sim *sim, QuakeySpawn config, char *arg)
@@ -1900,7 +1899,7 @@ static void sim_spawn(Sim *sim, QuakeySpawn config, char *arg)
         int n = 2 * sim->max_hosts;
         if (n == 0)
             n = 8;
-        Host **p = rprealloc(sim->hosts, n * sizeof(Host*));
+        Host **p = realloc(sim->hosts, n * sizeof(Host*));
         if (p == NULL) {
             TODO;
         }
@@ -1908,7 +1907,7 @@ static void sim_spawn(Sim *sim, QuakeySpawn config, char *arg)
         sim->max_hosts = n;
     }
 
-    Host *host = rpmalloc(sizeof(Host));
+    Host *host = malloc(sizeof(Host));
     if (host == NULL) {
         TODO;
     }
@@ -2029,7 +2028,7 @@ void _start(void)
 
 int quakey_init(Quakey **quakey)
 {
-    Sim *sim = rpmalloc(sizeof(Sim));
+    Sim *sim = malloc(sizeof(Sim));
     if (sim == NULL)
         return -1;
     sim_init(sim);
@@ -2037,7 +2036,7 @@ int quakey_init(Quakey **quakey)
         *quakey = (void*) sim;
     } else {
         sim_free(sim);
-        rpfree(sim);
+        free(sim);
     }
     return 0;
 }
@@ -2046,7 +2045,7 @@ void quakey_free(Quakey *quakey)
 {
     if (quakey) {
         sim_free((Sim*) quakey);
-        rpfree(quakey);
+        free(quakey);
     }
 }
 
@@ -2902,7 +2901,7 @@ char *mock_realpath(char *path, char *dst)
 
     // Allocate buffer if dst is NULL
     if (dst == NULL) {
-        dst = rpmalloc(result_len + 1);
+        dst = malloc(result_len + 1);
         if (dst == NULL) {
             *host_errno_ptr(host) = ENOMEM;
             return NULL;
@@ -3023,7 +3022,7 @@ DIR *mock_opendir(char *name)
     }
 
     // Allocate DIR structure
-    DIR *dirp = rpmalloc(sizeof(DIR));
+    DIR *dirp = malloc(sizeof(DIR));
     if (dirp == NULL) {
         // Close the descriptor since we can't return it
         host_close(host, ret, false);
@@ -3102,16 +3101,16 @@ int mock_closedir(DIR *dirp)
         switch (ret) {
         case HOST_ERROR_BADIDX:
             *host_errno_ptr(host) = EBADF;
-            rpfree(dirp);
+            free(dirp);
             return -1;
         default:
             *host_errno_ptr(host) = EIO;
-            rpfree(dirp);
+            free(dirp);
             return -1;
         }
     }
 
-    rpfree(dirp);
+    free(dirp);
     return 0;
 }
 
@@ -3692,7 +3691,7 @@ char *mock__fullpath(char *path, char *dst, int cap)
 
     // Allocate buffer if dst is NULL
     if (dst == NULL) {
-        dst = rpmalloc(result_len + 1);
+        dst = malloc(result_len + 1);
         if (dst == NULL) {
             *host_errno_ptr(host) = ENOMEM;
             return NULL;
@@ -3825,7 +3824,7 @@ HANDLE mock_FindFirstFileA(char *lpFileName, WIN32_FIND_DATAA *lpFindFileData)
     }
 
     // Allocate find handle structure
-    FindHandle *fh = rpmalloc(sizeof(FindHandle));
+    FindHandle *fh = malloc(sizeof(FindHandle));
     if (fh == NULL) {
         host_close(host, ret, false);
         *host_errno_ptr(host) = ERROR_NOT_ENOUGH_MEMORY;
@@ -3838,7 +3837,7 @@ HANDLE mock_FindFirstFileA(char *lpFileName, WIN32_FIND_DATAA *lpFindFileData)
     int read_ret = host_read_dir(host, fh->fd, &entry);
     if (read_ret < 0) {
         host_close(host, fh->fd, false);
-        rpfree(fh);
+        free(fh);
         switch (read_ret) {
         case HOST_ERROR_BADIDX:
         case HOST_ERROR_BADARG:
@@ -3853,7 +3852,7 @@ HANDLE mock_FindFirstFileA(char *lpFileName, WIN32_FIND_DATAA *lpFindFileData)
     if (read_ret == 0) {
         // Empty directory - no files found
         host_close(host, fh->fd, false);
-        rpfree(fh);
+        free(fh);
         *host_errno_ptr(host) = ERROR_FILE_NOT_FOUND;
         return INVALID_HANDLE_VALUE;
     }
@@ -3927,7 +3926,7 @@ BOOL mock_FindClose(HANDLE hFindFile)
 
     int ret = host_close(host, fh->fd, false);
     if (ret < 0) {
-        rpfree(fh);
+        free(fh);
         switch (ret) {
         case HOST_ERROR_BADIDX:
             *host_errno_ptr(host) = ERROR_INVALID_HANDLE;
@@ -3938,7 +3937,7 @@ BOOL mock_FindClose(HANDLE hFindFile)
         }
     }
 
-    rpfree(fh);
+    free(fh);
     *host_errno_ptr(host) = ERROR_SUCCESS;
     return 1;  // TRUE
 }

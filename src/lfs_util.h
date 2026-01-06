@@ -49,7 +49,7 @@
 #define LFS_NO_ERROR
 
 #ifndef LFS_NO_MALLOC
-#include "rpmalloc.h"
+#include "libc.h"
 #endif
 #ifndef LFS_NO_ASSERT
 #include <assert.h>
@@ -250,7 +250,7 @@ static inline void *lfs_malloc(size_t size) {
 #if defined(LFS_MALLOC)
     return LFS_MALLOC(size);
 #elif !defined(LFS_NO_MALLOC)
-    return rpmalloc(size);
+    return malloc(size);
 #else
     (void)size;
     return NULL;
@@ -262,7 +262,7 @@ static inline void lfs_free(void *p) {
 #if defined(LFS_FREE)
     LFS_FREE(p);
 #elif !defined(LFS_NO_MALLOC)
-    rpfree(p);
+    free(p);
 #else
     (void)p;
 #endif
