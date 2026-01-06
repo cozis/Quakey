@@ -21,6 +21,10 @@ int printf(const char *restrict fmt, ...)
     ret = stbsp_vsnprintf(buf, sizeof(buf), fmt, args);
     va_end(args);
 
+    if (ret < 0 || ret > (int) sizeof(buf)) {
+        __builtin_trap(); // TODO
+    }
+
 #ifdef _WIN32
     WriteFile(GetStdHandle((unsigned long) -11), buf, ret, NULL, NULL);
 #else
@@ -29,7 +33,7 @@ int printf(const char *restrict fmt, ...)
         : "=a" (ret)
         : "a" (1),
             "D" (1),
-            "S" (args),
+            "S" (buf),
             "d" (ret)
         : "rcx", "r11", "memory"
     );
