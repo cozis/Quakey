@@ -8,6 +8,7 @@
 #include <windows.h>
 #else
 #include <time.h>
+#include <fcntl.h>
 #endif
 #endif
 
@@ -57,4 +58,23 @@ Time get_current_time(void)
         return res;
     }
 #endif
+}
+
+int set_socket_blocking(SOCKET sock, bool value)
+{
+#ifdef _WIN32
+    u_long mode = !value;
+    if (ioctlsocket(sock, FIONBIO, &mode) == SOCKET_ERROR)
+        return -1;
+#else
+    int flags = fcntl(sock, F_GETFL, 0);
+    if (flags < 0)
+        return -1;
+    if (value) flags &= ~O_NONBLOCK;
+    else       flags |= O_NONBLOCK;
+    if (fcntl(sock, F_SETFL, flags) < 0)
+        return -1;
+#endif
+
+    return 0;
 }

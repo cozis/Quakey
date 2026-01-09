@@ -65,11 +65,26 @@ int client_init(void *state, int argc, char **argv,
         return -1;
     }
 
+    if (set_socket_blocking(client->fd, false) < 0) {
+        printf("Couldn't set socket as non-blocking\n");
+#ifdef _WIN32
+        closesocket(client->fd);
+#else
+        close(client->fd);
+#endif
+        return -1;
+    }
+
     struct sockaddr_in connect_buf;
     connect_buf.sin_family = AF_INET;
     connect_buf.sin_port   = htons(port);
     if (inet_pton(AF_INET, addr, &connect_buf.sin_addr) != 1) {
         printf("Couldn't parse address\n");
+#ifdef _WIN32
+        closesocket(client->fd);
+#else
+        close(client->fd);
+#endif
         return -1;
     }
     int ret = connect(client->fd, (struct sockaddr*) &connect_buf, sizeof(connect_buf));

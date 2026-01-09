@@ -824,6 +824,26 @@ static void desc_free(Desc *desc, lfs_t *lfs, bool rst)
 // Current schedulated host
 static Host *host___;
 
+static void abort_(char *str)
+{
+#ifdef _WIN32
+    WriteFile(GetStdHandle((DWORD)-11), str, strlen(str), NULL, NULL);
+#else
+    long ret;
+    __asm__ volatile (
+        "syscall"
+        : "=a" (ret)
+        : "a" (1),
+          "D" (1),
+          "S" (str),
+          "d" (strlen(str))
+        : "rcx", "r11", "memory"
+    );
+    (void) ret;
+#endif
+    __builtin_trap();
+}
+
 static int split_args(char *arg, char **argv, int max_argc)
 {
     int argc = 0;
@@ -1478,7 +1498,8 @@ static int host_accept(Host *host, int desc_idx, Addr *addr, uint16_t *port)
         return HOST_ERROR_NOTSOCK;
     }
 
-    // TODO: check that the socket is non-blocking
+    if (!desc->non_blocking)
+        abort_("Socket not configured as non-blocking before accept()\n");
 
     int new_desc_idx = find_empty_desc_struct(host);
     if (new_desc_idx < 0)
@@ -1529,6 +1550,9 @@ static int host_connect(Host *host, int desc_idx,
             return HOST_ERROR_BADARG;
         return HOST_ERROR_NOTSOCK;
     }
+
+    if (!desc->non_blocking)
+        abort_("Socket not configured as non-blocking before connect()\n");
 
     if (!desc->is_explicitly_bound) {
         // We need to bind implicitly
@@ -1648,7 +1672,8 @@ static int host_read_dir(Host *host, int desc_idx, DirEntry *entry)
 
 static int recv_inner(Desc *desc, char *dst, int len)
 {
-    // TODO: check that the descriptor is non-blocking
+    if (!desc->non_blocking)
+        abort_("Socket not configured as non-blocking before recv()\n");
 
     if (desc->peer == NULL) {
         if (desc->connect_status == CONNECT_STATUS_RESET)
@@ -1667,7 +1692,8 @@ static int recv_inner(Desc *desc, char *dst, int len)
 
 static int send_inner(Desc *desc, char *src, int len)
 {
-    // TODO: check that the descriptor is non-blocking
+    if (!desc->non_blocking)
+        abort_("Socket not configured as non-blocking before send()\n");
 
     if (desc->peer == NULL) {
         if (desc->connect_status == CONNECT_STATUS_RESET)
@@ -2298,26 +2324,6 @@ int quakey_schedule_one(Quakey *quakey)
 BOOL WriteFile(HANDLE handle, char *src, DWORD len, DWORD *num, OVERLAPPED *ov);
 HANDLE GetStdHandle(DWORD nStdHandle);
 #endif
-
-static void abort_(char *str)
-{
-#ifdef _WIN32
-    WriteFile(GetStdHandle((DWORD)-11), str, strlen(str), NULL, NULL);
-#else
-    long ret;
-    __asm__ volatile (
-        "syscall"
-        : "=a" (ret)
-        : "a" (1),
-          "D" (1),
-          "S" (str),
-          "d" (strlen(str))
-        : "rcx", "r11", "memory"
-    );
-    (void) ret;
-#endif
-    __builtin_trap();
-}
 
 int *mock_errno_ptr(void)
 {

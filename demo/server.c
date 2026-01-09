@@ -38,6 +38,15 @@ int server_init(void *state, int argc, char **argv,
     if (server->listen_fd < 0)
         return -1;
 
+    if (set_socket_blocking(server->listen_fd, false) < 0) {
+#ifdef _WIN32
+        closesocket(server->listen_fd);
+#else
+        close(server->listen_fd);
+#endif
+        return -1;
+    }
+
     int port = 8080;
 
     struct sockaddr_in bind_buf;
@@ -125,16 +134,26 @@ int server_tick(void *state, struct pollfd *pdata,
                     *pnum = 1;
                 }
             } else {
-                server->client_fd = fd;
-                *pnum = 0;
-                if (pcap > 0) {
-                    int events = POLLIN;
-                    if (server->output_used > 0)
-                        events |= POLLOUT;
-                    pdata[0].fd = server->client_fd;
-                    pdata[0].events = events;
-                    pdata[0].revents = 0;
-                    *pnum = 1;
+                if (set_socket_blocking(fd, false) < 0) {
+                    *pnum = 0;
+                    if (pcap > 0) {
+                        pdata[0].fd = server->listen_fd;
+                        pdata[0].events = POLLIN;
+                        pdata[0].revents = 0;
+                        *pnum = 1;
+                    }
+                } else {
+                    server->client_fd = fd;
+                    *pnum = 0;
+                    if (pcap > 0) {
+                        int events = POLLIN;
+                        if (server->output_used > 0)
+                            events |= POLLOUT;
+                        pdata[0].fd = server->client_fd;
+                        pdata[0].events = events;
+                        pdata[0].revents = 0;
+                        *pnum = 1;
+                    }
                 }
             }
         } else {
