@@ -256,9 +256,9 @@ int server_free(void *state)
 
     if (server->client_fd > -1) {
 #ifdef _WIN32
-        closesocket(server->listen_fd);
+        closesocket(server->client_fd);
 #else
-        close(server->listen_fd);
+        close(server->client_fd);
 #endif
     }
 
