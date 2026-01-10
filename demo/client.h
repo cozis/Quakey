@@ -19,11 +19,12 @@ typedef struct {
 } Client;
 
 int client_init(void *state, int argc, char **argv,
+    void **ctxs, struct pollfd *pdata, int pcap,
+    int *pnum, int *timeout);
+
+int client_tick(void *state, void **ctxs,
     struct pollfd *pdata, int pcap, int *pnum,
     int *timeout);
-
-int client_tick(void *state, struct pollfd *pdata,
-    int pcap, int *pnum, int *timeout);
 
 int client_free(void *state);
 

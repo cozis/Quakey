@@ -1,4 +1,4 @@
-#include "libc.h"
+#include <quakey.h>
 
 #define STB_SPRINTF_IMPLEMENTATION
 #include "stb_sprintf.h"
@@ -12,27 +12,30 @@ int WriteFile(void *handle,
 void *GetStdHandle(unsigned long nStdHandle);
 #endif
 
-int printf(const char *restrict fmt, ...)
+int vfprintf(FILE *stream, const char *restrict fmt, va_list args)
 {
     long ret;
     char buf[1<<10];
-    va_list args;
-    va_start(args, fmt);
     ret = stbsp_vsnprintf(buf, sizeof(buf), fmt, args);
-    va_end(args);
-
     if (ret < 0 || ret > (int) sizeof(buf)) {
         __builtin_trap(); // TODO
     }
 
 #ifdef _WIN32
-    WriteFile(GetStdHandle((unsigned long) -11), buf, ret, NULL, NULL);
+    unsigned long handle;
+    if (0) {}
+    else if (stream == stdin)  handle = GetStdHandle((unsigned long) -10);
+    else if (stream == stdout) handle = GetStdHandle((unsigned long) -11);
+    else if (stream == stderr) handle = GetStdHandle((unsigned long) -12);
+    else abort_("Invalid FILE handle");
+    WriteFile(handle, buf, ret, NULL, NULL);
 #else
+    int fd = (long) stream;
     __asm__ volatile (
         "syscall"
         : "=a" (ret)
         : "a" (1),
-            "D" (1),
+            "D" (fd),
             "S" (buf),
             "d" (ret)
         : "rcx", "r11", "memory"
@@ -40,6 +43,24 @@ int printf(const char *restrict fmt, ...)
     (void) ret;
 #endif
 
+return ret;
+}
+
+int fprintf(FILE *stream, const char *restrict fmt, ...)
+{
+    va_list args;
+    va_start(args, fmt);
+    int ret = vfprintf(stream, fmt, args);
+    va_end(args);
+    return ret;
+}
+
+int printf(const char *restrict fmt, ...)
+{
+    va_list args;
+    va_start(args, fmt);
+    int ret = vfprintf(stdout, fmt, args);
+    va_end(args);
     return ret;
 }
 
@@ -451,7 +472,7 @@ void *fopen(const char *path, const char *mode)
     return NULL;
 }
 
-int fclose(void *stream)
+int fclose(FILE *stream)
 {
     (void) stream;
     return 0;

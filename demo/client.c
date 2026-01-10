@@ -42,8 +42,8 @@ static int send_new_message(Client *client)
 }
 
 int client_init(void *state, int argc, char **argv,
-    struct pollfd *pdata, int pcap, int *pnum,
-    int *timeout)
+    void **ctxs, struct pollfd *pdata, int pcap,
+    int *pnum, int *timeout)
 {
     Client *client = state;
 
@@ -147,8 +147,9 @@ static int process_message(Client *client)
     return 1;
 }
 
-int client_tick(void *state, struct pollfd *pdata,
-    int pcap, int *pnum, int *timeout)
+int client_tick(void *state, void **ctxs,
+    struct pollfd *pdata, int pcap, int *pnum,
+    int *timeout)
 {
     Client *client = state;
 

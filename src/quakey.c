@@ -263,6 +263,7 @@ struct Host {
     int  num_addrs;
 
     // Argument for poll()
+    void*         poll_ctxs[HOST_DESC_LIMIT];
     struct pollfd poll_array[HOST_DESC_LIMIT];
     int           poll_count;
     int           poll_timeout;
@@ -1023,6 +1024,7 @@ static void host_init(Host *host, Sim *sim, QuakeySpawn config, char *arg)
         host->state,
         host->argc,
         host->argv,
+        host->poll_ctxs,
         host->poll_array,
         HOST_DESC_LIMIT,
         &host->poll_count,
@@ -1211,6 +1213,7 @@ static void host_update(Host *host)
     host___ = host;
     int ret = host->tick_func(
         host->state,
+        host->poll_ctxs,
         host->poll_array,
         HOST_DESC_LIMIT,
         &host->poll_count,

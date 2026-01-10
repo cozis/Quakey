@@ -21,8 +21,8 @@
 #include "server.h"
 
 int server_init(void *state, int argc, char **argv,
-    struct pollfd *pdata, int pcap, int *pnum,
-    int *timeout)
+    void **ctxs, struct pollfd *pdata, int pcap,
+    int *pnum, int *timeout)
 {
     Server *server = state;
 
@@ -113,8 +113,9 @@ static int process_message(Server *server)
     return 1;
 }
 
-int server_tick(void *state, struct pollfd *pdata,
-    int pcap, int *pnum, int *timeout)
+int server_tick(void *state, void **ctxs,
+    struct pollfd *pdata, int pcap, int *pnum,
+    int *timeout)
 {
     Server *server = state;
 

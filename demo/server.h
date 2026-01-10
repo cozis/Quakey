@@ -16,11 +16,12 @@ typedef struct {
 } Server;
 
 int server_init(void *state, int argc, char **argv,
+    void **ctxs, struct pollfd *pdata, int pcap,
+    int *pnum, int *timeout);
+
+int server_tick(void *state, void **ctxs,
     struct pollfd *pdata, int pcap, int *pnum,
     int *timeout);
-
-int server_tick(void *state, struct pollfd *pdata,
-    int pcap, int *pnum, int *timeout);
 
 int server_free(void *state);
 

@@ -16,8 +16,8 @@ enum {
 };
 
 // Function pointers to a simulated program's code
-typedef int (*QuakeyInitFunc)(void *state, int argc, char **argv, struct pollfd *pdata, int pcap, int *pnum, int *timeout);
-typedef int (*QuakeyTickFunc)(void *state, struct pollfd *pdata, int pcap, int *pnum, int *timeout);
+typedef int (*QuakeyInitFunc)(void *state, int argc, char **argv, void **ctxs, struct pollfd *pdata, int pcap, int *pnum, int *timeout);
+typedef int (*QuakeyTickFunc)(void *state, void **ctxs, struct pollfd *pdata, int pcap, int *pnum, int *timeout);
 typedef int (*QuakeyFreeFunc)(void *state);
 
 typedef enum {
@@ -89,6 +89,8 @@ enum {
     ETIMEDOUT,
 };
 
+#define INT_MAX (int) ((unsigned int) -1 >> 1)
+
 typedef int            BOOL;
 typedef char           CHAR;
 typedef short          SHORT;
@@ -121,6 +123,8 @@ enum {
 enum {
     SOCK_STREAM,
 };
+
+#define INVALID_SOCKET ((SOCKET) -1)
 
 typedef int SOCKET;
 
@@ -510,8 +514,70 @@ BOOL   mock_FindClose(HANDLE hFindFile);
 #define FindClose        mock_FindClose
 #endif
 
-// Useful for debugging
+#include <stddef.h>
+
+typedef struct {} FILE;
+
+#define stdin  ((void*) 0)
+#define stdout ((void*) 1)
+#define stderr ((void*) 2)
+
+#define va_list          __builtin_va_list
+#define va_start(v, l)   __builtin_va_start(v, l)
+#define va_end(v)        __builtin_va_end(v)
+#define va_arg(v, T)     __builtin_va_arg(v, T)
+#define va_copy(d, s)    __builtin_va_copy(d, s)
+
+int vfprintf(FILE *stream, const char *restrict fmt, va_list args);
+int fprintf(FILE *stream, const char *restrict fmt, ...);
 int printf(const char *restrict fmt, ...);
 int puts(const char *s);
+
+void *memcpy(void *restrict dest, const void *restrict src, size_t n);
+void *memmove(void *dest, const void *src, size_t n);
+void *memset(void *s, int c, size_t n);
+int memcmp(const void *s1, const void *s2, size_t n);
+size_t strlen(const char *s);
+size_t strnlen(const char *s, size_t maxlen);
+char *strcpy(char *restrict dest, const char *restrict src);
+char *strncpy(char *restrict dest, const char *restrict src, size_t n);
+int strcmp(const char *s1, const char *s2);
+int strncmp(const char *s1, const char *s2, size_t n);
+char *strchr(const char *s, int c);
+char *strrchr(const char *s, int c);
+void *memchr(const void *s, int c, size_t n);
+char *strcat(char *restrict dest, const char *restrict src);
+char *strncat(char *restrict dest, const char *restrict src, size_t n);
+
+void __assert_fail(const char *assertion, const char *file,
+    unsigned int line, const char *function);
+
+size_t strcspn(const char *s, const char *reject);
+size_t strspn(const char *s, const char *accept);
+int __popcountdi2(long long a);
+
+void *mmap(void *addr, size_t len, int prot, int flags, int fd, long offset);
+int munmap(void *addr, size_t len);
+int madvise(void *addr, size_t len, int advice);
+int prctl(int option, unsigned long a2, unsigned long a3, unsigned long a4, unsigned long a5);
+long sysconf(int name);
+
+int *__errno_location(void);
+
+int pthread_key_create(unsigned *key, void (*destructor)(void *));
+int pthread_key_delete(unsigned key);
+int pthread_setspecific(unsigned key, const void *value);
+void *pthread_getspecific(unsigned key);
+
+void *fopen(const char *path, const char *mode);
+int fclose(FILE *stream);
+char *fgets(char *s, int n, void *stream);
+char *strstr(const char *h, const char *n);
+long strtol(const char *s, char **end, int base);
+
+// These are implemented by malloc.c, not libc.c
+void *malloc(size_t size);
+void* realloc(void* ptr, size_t size);
+void free(void *p);
 
 #endif // QUAKEY_INCLUDED

@@ -49,7 +49,7 @@
 #define LFS_NO_ERROR
 
 #ifndef LFS_NO_MALLOC
-#include "libc.h"
+#include <quakey.h>
 #endif
 #ifndef LFS_NO_ASSERT
 #include <assert.h>
