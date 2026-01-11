@@ -47,8 +47,10 @@ typedef struct {
 
 } QuakeySpawn;
 
+typedef unsigned long long QuakeyUInt64;
+
 // Start a simulation
-int quakey_init(Quakey **quakey);
+int quakey_init(Quakey **quakey, QuakeyUInt64 seed);
 
 // Stop a simulation
 void quakey_free(Quakey *quakey);
@@ -58,6 +60,9 @@ void quakey_spawn(Quakey *quakey, QuakeySpawn config, char *arg);
 
 // Schedule and executes one program until it would block, then returns
 int quakey_schedule_one(Quakey *quakey);
+
+// Generate a random u64
+QuakeyUInt64 quakey_random(void);
 
 ////////////////////////////////////////////////////////
 
@@ -112,6 +117,9 @@ typedef unsigned long  ULONG_PTR;
 ////////////////////////////////////////////////////////
 
 int *mock_errno_ptr(void);
+
+long mock_strtol(const char *ptr,
+    char **restrict end, int base);
 
 ////////////////////////////////////////////////////////
 
@@ -466,6 +474,7 @@ BOOL   mock_FindClose(HANDLE hFindFile);
 
 #ifdef QUAKEY_ENABLE_MOCKS
 #define errno (*mock_errno_ptr())
+#define strtol           mock_strtol
 #define socket           mock_socket
 #define closesocket      mock_closesocket
 #define ioctlsocket      mock_ioctlsocket

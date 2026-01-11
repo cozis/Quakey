@@ -109,7 +109,7 @@ int main(int argc, char **argv)
 int main(void)
 {
     Quakey *quakey;
-    int ret = quakey_init(&quakey);
+    int ret = quakey_init(&quakey, 1);
     if (ret < 0)
         return -1;
 

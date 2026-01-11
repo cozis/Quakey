@@ -338,6 +338,8 @@ typedef struct {
 
 struct Sim {
 
+    uint64_t seed;
+
     // Current simulated time in nanoseconds
     Nanos current_time;
 
@@ -2128,8 +2130,9 @@ static b32 time_event_process(TimeEvent *event, Sim *sim)
 /////////////////////////////////////////////////////////////////
 // Sim Code
 
-static void sim_init(Sim *sim)
+static void sim_init(Sim *sim, uint64_t seed)
 {
+    sim->seed = seed;
     sim->current_time = 0;
     sim->num_hosts = 0;
     sim->max_hosts = 0;
@@ -2257,6 +2260,16 @@ static b32 sim_update(Sim *sim)
     return true;
 }
 
+static uint64_t sim_random(Sim *sim)
+{
+    uint64_t x = sim->seed;
+    x ^= x << 13;
+    x ^= x >> 7;
+    x ^= x << 17;
+    sim->seed = x;
+    return x;
+}
+
 /////////////////////////////////////////////////////////////////
 // Entry Point
 
@@ -2287,12 +2300,12 @@ void _start(void)
 /////////////////////////////////////////////////////////////////
 // Quakey Object
 
-int quakey_init(Quakey **quakey)
+int quakey_init(Quakey **quakey, QuakeyUInt64 seed)
 {
     Sim *sim = malloc(sizeof(Sim));
     if (sim == NULL)
         return -1;
-    sim_init(sim);
+    sim_init(sim, seed);
     if (quakey) {
         *quakey = (void*) sim;
     } else {
@@ -2320,13 +2333,16 @@ int quakey_schedule_one(Quakey *quakey)
     return sim_update((Sim*) quakey);
 }
 
+QuakeyUInt64 quakey_random(void)
+{
+    Host *host = host___;
+    if (host == NULL)
+        abort_("Call to mock_errno_ptr() with no node scheduled\n");
+    return sim_random(host->sim);
+}
+
 /////////////////////////////////////////////////////////////////
 // Mock System Calls
-
-#ifdef _WIN32
-BOOL WriteFile(HANDLE handle, char *src, DWORD len, DWORD *num, OVERLAPPED *ov);
-HANDLE GetStdHandle(DWORD nStdHandle);
-#endif
 
 int *mock_errno_ptr(void)
 {
@@ -2335,6 +2351,70 @@ int *mock_errno_ptr(void)
         abort_("Call to mock_errno_ptr() with no node scheduled\n");
 
     return host_errno_ptr(host);
+}
+
+long mock_strtol(const char *restrict ptr,
+    char **restrict end, int base)
+{
+    int len = strlen(ptr);
+    int cur = 0;
+
+    if (base != 10) {
+        if (end) *end = ptr;
+        *mock_errno_ptr() = EINVAL;
+        return 0;
+    }
+
+    while (cur < len && (
+        ptr[cur] == ' ' ||
+        ptr[cur] == '\t' ||
+        ptr[cur] == '\r' ||
+        ptr[cur] == '\n'))
+        cur++;
+
+    int neg = 0;
+    if (cur < len && ptr[cur] == '-') {
+        cur++;
+        neg = 1;
+    } else if (cur < len && ptr[cur] == '+') {
+        cur++;
+    }
+
+    if (cur == len || !is_digit(ptr[cur])) {
+        if (end) *end = ptr;
+        return 0;
+    }
+
+    long overflow = 0;
+    long buf = 0;
+    do {
+        int d = ptr[cur++] - '0';
+        if (!overflow) {
+            if (neg) {
+                if (buf < (LONG_MIN + d) / 10) {
+                    overflow = LONG_MIN;
+                } else {
+                    buf = buf * 10 - d;
+                }
+            } else {
+                if (buf > (LONG_MAX - d) / 10) {
+                    overflow = LONG_MAX;
+                } else {
+                    buf = buf * 10 + d;
+                }
+            }
+        }
+    } while (cur < len && is_digit(ptr[cur]));
+
+    if (end)
+        *end = ptr + cur;
+
+    if (overflow) {
+        *mock_errno_ptr() = ERANGE;
+        return overflow;
+    }
+
+    return buf;
 }
 
 int mock_socket(int domain, int type, int protocol)
