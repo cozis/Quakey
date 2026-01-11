@@ -110,6 +110,7 @@ int client_init(void *state, int argc, char **argv,
     if (send_new_message(client) < 0)
         return -1;
 
+    (void) ctxs;
     *pnum = 0;
     if (pcap > 0) {
         pdata[0].fd = client->fd;
@@ -231,6 +232,7 @@ int client_tick(void *state, void **ctxs,
         }
     }
 
+    (void) ctxs;
     *pnum = 0;
     if (pcap > 0) {
         int events = POLLIN;

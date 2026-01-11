@@ -3,6 +3,8 @@
 #define STB_SPRINTF_IMPLEMENTATION
 #include "stb_sprintf.h"
 
+#include "rpmalloc.h"
+
 #ifdef _WIN32
 int WriteFile(void *handle,
     char *src,
@@ -415,8 +417,16 @@ int madvise(void *addr, size_t len, int advice)
     return syscall3(SYS_madvise, (long) addr, len, advice);
 }
 
-int prctl(int option, unsigned long a2, unsigned long a3, unsigned long a4, unsigned long a5)
+int prctl(int option, ...)
 {
+    va_list args;
+    va_start(args, option);
+    unsigned long a2 = va_arg(args, unsigned long);
+    unsigned long a3 = va_arg(args, unsigned long);
+    unsigned long a4 = va_arg(args, unsigned long);
+    unsigned long a5 = va_arg(args, unsigned long);
+    va_end(args);
+
     return syscall6(SYS_prctl, option, a2, a3, a4, a5, 0);
 }
 
@@ -494,10 +504,17 @@ char *strstr(const char *h, const char *n)
     return NULL;
 }
 
-long strtol(const char *s, char **end, int base)
+void *malloc(size_t size)
 {
-    (void) s;
-    (void) end;
-    (void) base;
-    return 0;
+    return rpmalloc(size);
+}
+
+void *realloc(void *ptr, size_t size)
+{
+    return rprealloc(ptr, size);
+}
+
+void free(void *ptr)
+{
+    rpfree(ptr);
 }

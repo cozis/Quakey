@@ -13,6 +13,8 @@ enum {
     POLLIN  = 1<<0,
     POLLOUT = 1<<1,
     POLLERR = 1<<2,
+    POLLHUP = 1<<3,
+    POLLNVAL = 1<<4,
 };
 
 // Function pointers to a simulated program's code
@@ -67,9 +69,11 @@ QuakeyUInt64 quakey_random(void);
 ////////////////////////////////////////////////////////
 
 #define MAX_PATH 1024
+#define PATH_MAX 1024
 
 enum {
     NO_ERROR = 0,
+    EINTR,
     EBADF,
     EINVAL,
     EISDIR,
@@ -95,6 +99,10 @@ enum {
 };
 
 #define INT_MAX (int) ((unsigned int) -1 >> 1)
+#define INT_MIN (-INT_MAX - 1)
+
+#define LONG_MAX ((long) (~(unsigned long) 0 >> 1))
+#define LONG_MIN (-LONG_MAX - 1L)
 
 typedef int            BOOL;
 typedef char           CHAR;
@@ -119,6 +127,9 @@ typedef unsigned long  ULONG_PTR;
 int *mock_errno_ptr(void);
 
 long mock_strtol(const char *ptr,
+    char **restrict end, int base);
+
+long strtol(const char *ptr,
     char **restrict end, int base);
 
 ////////////////////////////////////////////////////////
@@ -182,6 +193,8 @@ struct sockaddr_in6 {
 
 #define INADDR_ANY 0
 
+#define INET_ADDRSTRLEN 16
+
 unsigned short htons(unsigned short hostshort);
 unsigned short ntohs(unsigned short netshort);
 int mock_inet_pton(int af, const char *restrict src, void *restrict dst);
@@ -221,14 +234,14 @@ enum {
 
 typedef int clockid_t;
 
-typedef long long time_t;
+typedef long long quakey_time_t;
 
-struct timespec {
-    time_t tv_sec;   /* Seconds */
-    long long tv_nsec;  /* Nanoseconds [0, 999'999'999] */
+struct quakey_timespec {
+    quakey_time_t tv_sec;   /* Seconds */
+    long long     tv_nsec;  /* Nanoseconds [0, 999'999'999] */
 };
 
-int mock_clock_gettime(clockid_t clockid, struct timespec *tp);
+int mock_clock_gettime(clockid_t clockid, struct quakey_timespec *tp);
 
 ////////////////////////////////////////////////////////
 
@@ -354,16 +367,16 @@ int mock_write(int fd, char *src, int len);
 
 ////////////////////////////////////////////////////////
 
-typedef long long off_t;
-typedef int mode_t;
+typedef long long quakey_off_t;
+typedef int quakey_mode_t;
 
 // Simplified stat structure for mock
 struct stat {
-    mode_t   st_mode;     // File mode (type and permissions)
-    off_t    st_size;     // Total size, in bytes
-    time_t   st_atime;    // Time of last access
-    time_t   st_mtime;    // Time of last modification
-    time_t   st_ctime;    // Time of last status change
+    quakey_mode_t st_mode;     // File mode (type and permissions)
+    quakey_off_t  st_size;     // Total size, in bytes
+    quakey_time_t st_atime;    // Time of last access
+    quakey_time_t st_mtime;    // Time of last modification
+    quakey_time_t st_ctime;    // Time of last status change
 };
 
 // File type mode bits
@@ -387,11 +400,16 @@ enum {
     SEEK_END = 2,
 };
 
-off_t mock_lseek(int fd, off_t offset, int whence);
+quakey_off_t mock_lseek(int fd, quakey_off_t offset, int whence);
 
 DWORD mock_SetFilePointer(HANDLE hFile, LONG lDistanceToMove, PLONG lpDistanceToMoveHigh, DWORD dwMoveMethod);
 
 ////////////////////////////////////////////////////////
+
+#define LOCK_SH		1	/* shared lock */
+#define LOCK_EX		2	/* exclusive lock */
+#define LOCK_NB		4	/* or'd with one of the above to prevent blocking */
+#define LOCK_UN		8	/* remove lock */
 
 int  mock_flock(int fd, int op);
 
@@ -407,7 +425,7 @@ BOOL mock_FlushFileBuffers(HANDLE handle);
 
 int mock_mkstemp(char *path);
 
-int mock_mkdir(char *path, mode_t mode);
+int mock_mkdir(char *path, quakey_mode_t mode);
 int mock__mkdir(char *path);
 
 int mock_remove(char *path);
@@ -474,7 +492,12 @@ BOOL   mock_FindClose(HANDLE hFindFile);
 
 #ifdef QUAKEY_ENABLE_MOCKS
 #define errno (*mock_errno_ptr())
+#define timespec         quakey_timespec
+#define off_t            quakey_off_t
 #define strtol           mock_strtol
+#define malloc           mock_malloc
+#define realloc          mock_realloc
+#define free             mock_free
 #define socket           mock_socket
 #define closesocket      mock_closesocket
 #define ioctlsocket      mock_ioctlsocket
@@ -568,7 +591,7 @@ int __popcountdi2(long long a);
 void *mmap(void *addr, size_t len, int prot, int flags, int fd, long offset);
 int munmap(void *addr, size_t len);
 int madvise(void *addr, size_t len, int advice);
-int prctl(int option, unsigned long a2, unsigned long a3, unsigned long a4, unsigned long a5);
+int prctl(int option, ...);
 long sysconf(int name);
 
 int *__errno_location(void);
@@ -584,7 +607,6 @@ char *fgets(char *s, int n, void *stream);
 char *strstr(const char *h, const char *n);
 long strtol(const char *s, char **end, int base);
 
-// These are implemented by malloc.c, not libc.c
 void *malloc(size_t size);
 void* realloc(void* ptr, size_t size);
 void free(void *p);

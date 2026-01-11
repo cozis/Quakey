@@ -2465,5 +2465,3 @@ rpmalloc_get_heap_for_ptr(void* ptr) {
 }
 
 #endif
-
-#include "malloc.c"

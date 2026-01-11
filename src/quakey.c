@@ -827,6 +827,8 @@ static void desc_free(Desc *desc, lfs_t *lfs, bool rst)
 // Current schedulated host
 static Host *host___;
 
+static int errno___;
+
 static void abort_(char *str)
 {
 #ifdef _WIN32
@@ -2353,15 +2355,15 @@ int *mock_errno_ptr(void)
     return host_errno_ptr(host);
 }
 
-long mock_strtol(const char *restrict ptr,
-    char **restrict end, int base)
+static long strtol_inner(const char *ptr,
+    char **restrict end, int base, int *perrno)
 {
     int len = strlen(ptr);
     int cur = 0;
 
     if (base != 10) {
         if (end) *end = ptr;
-        *mock_errno_ptr() = EINVAL;
+        *perrno = EINVAL;
         return 0;
     }
 
@@ -2410,11 +2412,23 @@ long mock_strtol(const char *restrict ptr,
         *end = ptr + cur;
 
     if (overflow) {
-        *mock_errno_ptr() = ERANGE;
+        *perrno = ERANGE;
         return overflow;
     }
 
     return buf;
+}
+
+long strtol(const char *ptr,
+    char **restrict end, int base)
+{
+    return strtol_inner(ptr, end, base, &errno___);
+}
+
+long mock_strtol(const char *restrict ptr,
+    char **restrict end, int base)
+{
+    return strtol_inner(ptr, end, base, mock_errno_ptr());
 }
 
 int mock_socket(int domain, int type, int protocol)
@@ -2990,7 +3004,7 @@ int mock_rename(char *oldpath, char *newpath)
     return 0;
 }
 
-int mock_clock_gettime(clockid_t clockid, struct timespec *tp)
+int mock_clock_gettime(clockid_t clockid, struct quakey_timespec *tp)
 {
     Host *host = host___;
     if (host == NULL)
@@ -3017,8 +3031,8 @@ int mock_clock_gettime(clockid_t clockid, struct timespec *tp)
 
     // Convert nanoseconds to timespec
     // 1 second = 1,000,000,000 nanoseconds
-    tp->tv_sec  = (time_t)  (now / 1000000000ULL);
-    tp->tv_nsec = (int64_t) (now % 1000000000ULL);
+    tp->tv_sec  = (quakey_time_t) (now / 1000000000ULL);
+    tp->tv_nsec = (int64_t)       (now % 1000000000ULL);
 
     return 0;
 }
@@ -3049,7 +3063,7 @@ int mock_fsync(int fd)
     return 0;
 }
 
-off_t mock_lseek(int fd, off_t offset, int whence)
+quakey_off_t mock_lseek(int fd, quakey_off_t offset, int whence)
 {
     Host *host = host___;
     if (host == NULL)
@@ -3072,7 +3086,7 @@ off_t mock_lseek(int fd, off_t offset, int whence)
         break;
     default:
         *host_errno_ptr(host) = EINVAL;
-        return (off_t)-1;
+        return (quakey_off_t)-1;
     }
 
     int ret = host_lseek(host, fd, offset, host_whence);
@@ -3081,10 +3095,10 @@ off_t mock_lseek(int fd, off_t offset, int whence)
             *host_errno_ptr(host) = EBADF;
         else
             *host_errno_ptr(host) = EINVAL;
-        return (off_t)-1;
+        return (quakey_off_t)-1;
     }
 
-    return (off_t)ret;
+    return (quakey_off_t)ret;
 }
 
 int mock_fstat(int fd, struct stat *buf)
@@ -3119,7 +3133,7 @@ int mock_fstat(int fd, struct stat *buf)
         buf->st_size = 0;
     } else {
         buf->st_mode = S_IFREG | 0644;  // Regular file with rw-r--r-- permissions
-        buf->st_size = (off_t) info.size;
+        buf->st_size = (quakey_off_t) info.size;
     }
 
     return 0;
@@ -3245,7 +3259,7 @@ char *mock_realpath(char *path, char *dst)
     return dst;
 }
 
-int mock_mkdir(char *path, mode_t mode)
+int mock_mkdir(char *path, quakey_mode_t mode)
 {
     Host *host = host___;
     if (host == NULL)
@@ -4391,4 +4405,19 @@ int mock_inet_pton(int af, const char *restrict src, void *restrict dst)
     }
 
     return 1;
+}
+
+void *mock_malloc(size_t size)
+{
+    return malloc(size);
+}
+
+void *mock_realloc(void *ptr, size_t size)
+{
+    return realloc(ptr, size);
+}
+
+void mock_free(void *ptr)
+{
+    free(ptr);
 }

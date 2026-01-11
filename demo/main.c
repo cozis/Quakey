@@ -19,6 +19,7 @@ int main(int argc, char **argv)
     int ret;
     Server state;
 
+    void*         poll_ctxs[POLL_CAPACITY];
     struct pollfd poll_array[POLL_CAPACITY];
     int poll_count;
     int poll_timeout;
@@ -27,6 +28,7 @@ int main(int argc, char **argv)
         &state,
         argc,
         argv,
+        poll_ctxs,
         poll_array,
         POLL_CAPACITY,
         &poll_count,
@@ -45,6 +47,7 @@ int main(int argc, char **argv)
 
         ret = server_tick(
             &state,
+            poll_ctxs,
             poll_array,
             POLL_CAPACITY,
             &poll_count,
@@ -65,6 +68,7 @@ int main(int argc, char **argv)
     int ret;
     Client state;
 
+    void*         poll_ctxs[POLL_CAPACITY];
     struct pollfd poll_array[POLL_CAPACITY];
     int poll_count;
     int poll_timeout;
@@ -73,6 +77,7 @@ int main(int argc, char **argv)
         &state,
         argc,
         argv,
+        poll_ctxs,
         poll_array,
         POLL_CAPACITY,
         &poll_count,
@@ -91,6 +96,7 @@ int main(int argc, char **argv)
 
         ret = client_tick(
             &state,
+            poll_ctxs,
             poll_array,
             POLL_CAPACITY,
             &poll_count,

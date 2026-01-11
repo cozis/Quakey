@@ -74,6 +74,7 @@ int server_init(void *state, int argc, char **argv,
 
     printf("Server initialized\n");
 
+    (void) ctxs;
     if (pcap > 0) {
         pdata[0].fd = server->listen_fd;
         pdata[0].events = POLLIN;
@@ -241,6 +242,7 @@ int server_tick(void *state, void **ctxs,
         }
     }
 
+    (void) ctxs;
     *timeout = -1;
     return 0;
 }
